@@ -1,0 +1,29 @@
+# This file configures Charmcraft.
+# See https://documentation.ubuntu.com/charmcraft/stable/reference/files/charmcraft-yaml-file/
+type: charm
+name: relation-app-write-provider
+title: Relation App Write Provider
+summary: Tests leadership constraints on app databag writes
+description: |
+  A test charm that validates leadership constraints when writing to
+  relation app databags. Used to verify that only leader units can write
+  to app-level relation data and non-leaders receive exceptions.
+
+base: ubuntu@24.04
+platforms:
+  amd64:
+  arm64:
+
+assumes:
+  - juju >= 3.6
+
+provides:
+  test-app-write:
+    interface: test-app-write
+
+parts:
+  charm:
+    plugin: uv
+    source: .
+    build-snaps:
+      - astral-uv

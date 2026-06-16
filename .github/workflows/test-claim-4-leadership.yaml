@@ -1,0 +1,88 @@
+name: Test Claim 4 - Leadership constraints on relation app databag writes
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/test-claim-4-leadership.yaml
+      - charms/relation-app-write-provider/**
+      - charms/relation-app-write-requirer/**
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  build-and-test:
+    name: Build charms and test leadership constraint claim
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+
+      - name: Set up tox and tox-uv
+        run: uv tool install tox --with tox-uv
+
+      # ===== PROVIDER CHARM =====
+      - name: Lint and run unit tests for provider charm
+        working-directory: charms/relation-app-write-provider
+        run: |
+          uvx --python 3.10 --with tox-uv tox -e lint,unit
+
+      - name: Set up Concierge
+        run: sudo snap install --classic concierge
+
+      - name: Set up Juju and charm development tools
+        run: sudo concierge prepare -p machine
+
+      - name: Pack provider charm
+        working-directory: charms/relation-app-write-provider
+        run: charmcraft pack
+
+      # ===== REQUIRER CHARM =====
+      - name: Lint and run unit tests for requirer charm
+        working-directory: charms/relation-app-write-requirer
+        run: |
+          uvx --python 3.10 --with tox-uv tox -e lint,unit
+
+      - name: Pack requirer charm
+        working-directory: charms/relation-app-write-requirer
+        run: charmcraft pack
+
+      # ===== INTEGRATION TESTS =====
+      - name: Run integration tests
+        working-directory: charms/relation-app-write-provider
+        run: |
+          # Build both charms and make them available to the integration tests
+          CHARM_PATH="$(pwd)/relation-app-write-provider*.charm" \
+          REQUIRER_CHARM_PATH="$(cd ../relation-app-write-requirer && pwd)/relation-app-write-requirer*.charm" \
+          tox -e integration -- --juju-dump-logs logs
+
+      - name: Upload logs on failure
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: juju-dump-logs-claim-4
+          path: charms/relation-app-write-provider/logs
+          if-no-files-found: ignore
+
+      - name: Summary
+        if: success()
+        run: |
+          echo "## ✅ Claim 4 Test Passed"
+          echo ""
+          echo "**Claim:** Writing to application relation databag is leader-only; non-leader"
+          echo "attempts fail with an exception due to permission checks."
+          echo ""
+          echo "**Test Result:** Leadership constraints on relation app databag writes validated successfully."
+          echo ""
+          echo "**Details:**"
+          echo "- Provider charm deployed with 2+ units (leader and non-leader)"
+          echo "- Requirer charm deployed with 1 unit"
+          echo "- Relation integrated between provider and requirer"
+          echo "- Leader unit(s) successfully wrote to app databag"
+          echo "- Non-leader unit(s) received ModelError exceptions"
+          echo "- Leadership transfer verified permission changes correctly"
