@@ -28,11 +28,15 @@ jobs:
             --author Charmer
       - name: Set up tox and tox-uv
         run: uv tool install tox --with tox-uv
-      - name: Lock, lint, and run unit tests
+      - name: Lock
         working-directory: charms/myapp-machine
-        run: |
-          uv lock
-          uvx --python 3.10 --with tox-uv tox -e lint,unit
+        run: uv lock
+      - name: Lint
+        working-directory: charms/myapp-machine
+        run: uvx --python 3.10 --with tox-uv tox -e lint,unit
+      - name: Run unit tests
+        working-directory: charms/myapp-machine
+        run: uvx --python 3.10 --with tox-uv tox -e lint,unit
       - name: Set up Concierge
         run: sudo snap install --classic concierge
       - name: Set up Juju and charm development tools
