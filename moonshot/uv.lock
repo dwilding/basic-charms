@@ -139,7 +139,7 @@ wheels = [
 ]
 
 [[package]]
-name = "meteor"
+name = "moonshot"
 version = "0.0.1"
 source = { virtual = "." }
 dependencies = [
