@@ -1,17 +1,11 @@
 # This file configures Charmcraft.
 # See https://documentation.ubuntu.com/charmcraft/stable/reference/files/charmcraft-yaml-file/
 type: charm
-name: pydantic-minimal
-title: Charm Template
-summary: A very short one-line summary of the charm.
+name: kepler
+title: Web Server Demo
+summary: A demo charm that operates a small Python FastAPI server.
 description: |
-  A single sentence that says what the charm is, concisely and memorably.
-
-  A paragraph of one to three short sentences, that describe what the charm does.
-
-  A third paragraph that explains what need the charm meets.
-
-  Finally, a paragraph that describes whom the charm is useful for.
+  This charm demonstrates how to write a Kubernetes charm with Ops.
 
 # Documentation:
 # https://documentation.ubuntu.com/charmcraft/stable/howto/build-guides/select-platforms/
@@ -22,6 +16,7 @@ platforms:
 
 assumes:
   - juju >= 3.6
+  - k8s-api
 
 parts:
   charm:
@@ -47,3 +42,19 @@ config:
         Acceptable values are: "info", "debug", "warning", "error" and "critical"
       default: "info"
       type: string
+
+containers:
+  demo-server:
+    resource: demo-server-image
+
+resources:
+  # An OCI image resource for the container listed above.
+  demo-server-image:
+    type: oci-image
+    description: OCI image from GitHub Container Repository
+    # The upstream-source field is ignored by Charmcraft and Juju, but it can be
+    # useful to developers in identifying the source of the OCI image.  It is also
+    # used by the 'canonical/charming-actions' GitHub action for automated releases.
+    # The test_deploy function in tests/integration/test_charm.py reads upstream-source
+    # to determine which OCI image to use when running the charm's integration tests.
+    upstream-source: ghcr.io/canonical/api_demo_server:1.0.4

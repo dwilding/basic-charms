@@ -1,16 +1,16 @@
-name: Charmcraft main's machine profile
+name: micron
 
 on:
   pull_request:
     paths:
-      - .github/workflows/charmcraft-main-machine.yaml
+      - .github/workflows/micron.yaml
+      - micron/**
   workflow_dispatch:
 
 permissions: {}
 
 jobs:
-  generate-and-test:
-    name: Test a generated charm
+  pack-and-test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -19,33 +19,29 @@ jobs:
           persist-credentials: false
       - name: Set up uv
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
-      - name: Generate a charm
-        run: |
-          mkdir -p charms/myapp-machine
-          uvx git+https://github.com/canonical/charmcraft init \
-            --profile machine \
-            --project-dir charms/myapp-machine \
-            --author Charmer
       - name: Set up tox and tox-uv
         run: uv tool install tox --with tox-uv
-      - name: Lock, lint, and run unit tests
-        working-directory: charms/myapp-machine
+      - name: Lint
+        working-directory: micron
         run: |
-          uv lock
-          uvx --python 3.10 --with tox-uv tox -e lint,unit
+          uvx --python 3.10 --with tox-uv tox -e lint
+      - name: Run unit tests
+        working-directory: micron
+        run: |
+          uvx --python 3.10 --with tox-uv tox -e unit
       - name: Set up Concierge
         run: sudo snap install --classic concierge
       - name: Set up Juju and charm development tools
         run: sudo concierge prepare -p machine
       - name: Pack the charm
-        working-directory: charms/myapp-machine
+        working-directory: micron
         run: charmcraft pack
       - name: Run integration tests
-        working-directory: charms/myapp-machine
+        working-directory: micron
         run: tox -e integration -- --juju-dump-logs logs
       - name: Upload logs
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: juju-dump-logs
-          path: charms/myapp-machine/logs
+          path: micron/logs
