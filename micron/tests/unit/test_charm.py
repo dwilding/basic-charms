@@ -6,7 +6,7 @@
 import pytest
 from ops import testing
 
-from charm import MoonshotCharm
+from charm import MicronCharm
 
 
 def mock_get_version():
@@ -17,8 +17,8 @@ def mock_get_version():
 def test_start(monkeypatch: pytest.MonkeyPatch):
     """Test that the charm has the correct state after handling the start event."""
     # Arrange:
-    ctx = testing.Context(MoonshotCharm)
-    monkeypatch.setattr("charm.moonshot.get_version", mock_get_version)
+    ctx = testing.Context(MicronCharm)
+    monkeypatch.setattr("charm.micron.get_version", mock_get_version)
     # Act:
     state_out = ctx.run(ctx.on.start(), testing.State())
     # Assert:

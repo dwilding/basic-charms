@@ -1,10 +1,10 @@
-name: meteor
+name: kosmos
 
 on:
   pull_request:
     paths:
-      - .github/workflows/meteor.yaml
-      - meteor/**
+      - .github/workflows/kosmos.yaml
+      - kosmos/**
   workflow_dispatch:
 
 permissions: {}
@@ -22,26 +22,26 @@ jobs:
       - name: Set up tox and tox-uv
         run: uv tool install tox --with tox-uv
       - name: Lint
-        working-directory: meteor
+        working-directory: kosmos
         run: |
           uvx --python 3.10 --with tox-uv tox -e lint
       - name: Run unit tests
-        working-directory: meteor
+        working-directory: kosmos
         run: |
           uvx --python 3.10 --with tox-uv tox -e unit
       - name: Set up Concierge
         run: sudo snap install --classic concierge
       - name: Set up Juju and charm development tools
-        run: sudo concierge prepare -p machine
+        run: sudo concierge prepare -p k8s
       - name: Pack the charm
-        working-directory: meteor
+        working-directory: kosmos
         run: charmcraft pack
       - name: Run integration tests
-        working-directory: meteor
+        working-directory: kosmos
         run: tox -e integration -- --juju-dump-logs logs
       - name: Upload logs
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: juju-dump-logs
-          path: meteor/logs
+          path: kosmos/logs

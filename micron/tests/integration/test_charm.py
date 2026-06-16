@@ -19,15 +19,15 @@ logger = logging.getLogger(__name__)
 @pytest.mark.juju_setup
 def test_deploy(charm: pathlib.Path, juju: jubilant.Juju):
     """Deploy the charm under test."""
-    juju.deploy(charm, app="moonshot")
+    juju.deploy(charm, app="micron")
     juju.wait(jubilant.all_active)
 
 
-# If you implement moonshot.get_version in the charm source,
+# If you implement micron.get_version in the charm source,
 # remove the @pytest.mark.skip line to enable this test.
 # Alternatively, remove this test if you don't need it.
-@pytest.mark.skip(reason="moonshot.get_version is not implemented")
+@pytest.mark.skip(reason="micron.get_version is not implemented")
 def test_workload_version_is_set(charm: pathlib.Path, juju: jubilant.Juju):
     """Check that the correct version of the workload is running."""
-    version = juju.status().apps["moonshot"].version
+    version = juju.status().apps["micron"].version
     assert version == "3.14"  # Replace 3.14 by the expected version of the workload.

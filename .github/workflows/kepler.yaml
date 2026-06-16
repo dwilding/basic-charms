@@ -1,17 +1,16 @@
-name: Moonshot
+name: kepler
 
 on:
   pull_request:
     paths:
-      - .github/workflows/moonshot.yaml
-      - moonshot/**
+      - .github/workflows/kepler.yaml
+      - kepler/**
   workflow_dispatch:
 
 permissions: {}
 
 jobs:
   pack-and-test:
-    name: Test the charm
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -23,26 +22,26 @@ jobs:
       - name: Set up tox and tox-uv
         run: uv tool install tox --with tox-uv
       - name: Lint
-        working-directory: moonshot
+        working-directory: kepler
         run: |
           uvx --python 3.10 --with tox-uv tox -e lint
       - name: Run unit tests
-        working-directory: moonshot
+        working-directory: kepler
         run: |
           uvx --python 3.10 --with tox-uv tox -e unit
       - name: Set up Concierge
         run: sudo snap install --classic concierge
       - name: Set up Juju and charm development tools
-        run: sudo concierge prepare -p machine
+        run: sudo concierge prepare -p k8s
       - name: Pack the charm
-        working-directory: moonshot
+        working-directory: kepler
         run: charmcraft pack
       - name: Run integration tests
-        working-directory: moonshot
+        working-directory: kepler
         run: tox -e integration -- --juju-dump-logs logs
       - name: Upload logs
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: juju-dump-logs
-          path: moonshot/logs
+          path: kepler/logs
