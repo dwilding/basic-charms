@@ -5,6 +5,7 @@ on:
     paths:
       - .github/workflows/meteor.yaml
       - meteor/**
+      - micron/**
   workflow_dispatch:
 
 permissions: {}
@@ -36,9 +37,14 @@ jobs:
       - name: Pack the charm
         working-directory: meteor
         run: charmcraft pack
+      - name: Pack micron charm for relation integration
+        working-directory: micron
+        run: charmcraft pack
       - name: Run integration tests
         working-directory: meteor
-        run: tox -e integration -- --juju-dump-logs logs
+        run: |
+          MICRON_CHARM_PATH="$(cd ../micron && pwd)/$(cd ../micron && ls -1 micron_*.charm | head -n1)" \
+            tox -e integration -- --juju-dump-logs logs
       - name: Upload logs
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7

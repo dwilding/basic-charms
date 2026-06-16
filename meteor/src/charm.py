@@ -21,6 +21,18 @@ class MeteorCharm(ops.CharmBase):
         super().__init__(framework)
         framework.observe(self.on.install, self._on_install)
         framework.observe(self.on.start, self._on_start)
+        framework.observe(
+            self.on.relation_write_relation_created,
+            self._on_relation_write_changed,
+        )
+        framework.observe(
+            self.on.relation_write_relation_joined,
+            self._on_relation_write_changed,
+        )
+        framework.observe(
+            self.on.relation_write_relation_changed,
+            self._on_relation_write_changed,
+        )
 
     def _on_install(self, event: ops.InstallEvent):
         """Install the workload on the machine."""
@@ -34,6 +46,22 @@ class MeteorCharm(ops.CharmBase):
         if version is not None:
             self.unit.set_workload_version(version)
         self.unit.status = ops.ActiveStatus()
+
+    def _on_relation_write_changed(self, event: ops.RelationEvent):
+        """Exercise app databag permissions and expose outcomes via unit status.
+
+        Claim under test: only the leader can write the local application databag.
+        """
+        if self.unit.is_leader():
+            event.relation.data[self.app]["leader-write"] = "ok"
+            self.unit.status = ops.ActiveStatus("app-write:leader-success")
+            return
+
+        try:
+            event.relation.data[self.app]["nonleader-write"] = "blocked"
+            self.unit.status = ops.ActiveStatus("app-write:nonleader-unexpected-success")
+        except ops.ModelError:
+            self.unit.status = ops.ActiveStatus("app-write:nonleader-modelerror")
 
 
 if __name__ == "__main__":  # pragma: nocover

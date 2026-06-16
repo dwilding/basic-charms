@@ -23,6 +23,10 @@ platforms:
 assumes:
   - juju >= 3.6
 
+requires:
+  relation-write:
+    interface: relation-write
+
 parts:
   charm:
     plugin: uv

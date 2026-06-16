@@ -23,3 +23,14 @@ def charm():
     path = pathlib.Path(charm).resolve()
     assert path.is_file(), f"{path} is not a file"
     return path
+
+
+@pytest.fixture(scope="session")
+def micron_charm() -> pathlib.Path:
+    """Return the path of the micron charm used for relation integration tests."""
+    charm = os.environ.get("MICRON_CHARM_PATH")
+    if not charm:
+        pytest.fail("MICRON_CHARM_PATH must be set for relation integration tests")
+    path = pathlib.Path(charm).resolve()
+    assert path.is_file(), f"{path} is not a file"
+    return path
