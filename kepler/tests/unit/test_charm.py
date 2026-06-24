@@ -51,3 +51,36 @@ def test_pebble_layer():
         state_out.get_container(container.name).service_statuses["fastapi-service"]
         == ops.pebble.ServiceStatus.ACTIVE
     )
+
+
+def test_update_backup_writes_through_mount(tmp_path):
+    """Refutation attempt for doc.md's claim about host-mounted files.
+
+    doc.md (line 210) claims: "If the charm writes to /etc/myapp/backup.yaml in
+    the container while handling the event, backup_file.read_text() will return
+    the data that the charm wrote."
+
+    This test mounts a host file at /etc/myapp/backup.yaml, runs the
+    update-backup action (which removes the file and writes new contents), and
+    checks whether the host file reflects the write.
+    """
+    backup_file = tmp_path / "backup.yaml"
+    original_data = "original: data\n"
+    backup_file.write_text(original_data)
+
+    ctx = testing.Context(KosmosCharm)
+    container = testing.Container(
+        name="demo-server",
+        can_connect=True,
+        mounts={"backup": testing.Mount(location="/etc/myapp/backup.yaml", source=backup_file)},
+    )
+    state_in = testing.State(containers={container})
+
+    new_data = "updated: data\n"
+    ctx.run(
+        ctx.on.action("update-backup", params={"data": new_data}),
+        state_in,
+    )
+
+    # If the claim holds, the host file should now contain the new data.
+    assert backup_file.read_text() == new_data

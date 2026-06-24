@@ -47,6 +47,20 @@ containers:
   demo-server:
     resource: demo-server-image
 
+actions:
+  update-backup:
+    description: |
+      Overwrite the workload's backup file at /etc/myapp/backup.yaml with the
+      contents provided in the "data" action parameter.
+
+      This is used to verify whether writes performed by the charm to a
+      host-mounted file propagate back to the host file.
+    params:
+      data:
+        type: string
+        description: The new contents to write to the backup file.
+    required: [data]
+
 resources:
   # An OCI image resource for the container listed above.
   demo-server-image:

@@ -19,6 +19,7 @@
 import logging
 
 import ops
+from charmlibs import pathops
 
 # Log messages can be retrieved using juju debug-log
 logger = logging.getLogger(__name__)
@@ -31,6 +32,28 @@ class KosmosCharm(ops.CharmBase):
         super().__init__(framework)
         self.pebble_service_name = "fastapi-service"
         framework.observe(self.on["demo-server"].pebble_ready, self._on_demo_server_pebble_ready)
+        framework.observe(self.on.update_backup_action, self._on_update_backup)
+
+    def _on_update_backup(self, event: ops.ActionEvent) -> None:
+        """Overwrite the backup file in the workload container.
+
+        The backup file is expected to be host-mounted at
+        ``/etc/myapp/backup.yaml`` (see the unit test). We remove the existing
+        file before writing the new contents, to emulate a charm that clears a
+        stale file before writing fresh data.
+        """
+        container = self.unit.get_container("demo-server")
+        if not container.can_connect():
+            event.fail("workload container is not ready")
+            return
+        data = event.params["data"]
+        backup_root = pathops.ContainerPath("/etc/myapp", container=container)
+        backup_file = backup_root / "backup.yaml"
+        # Remove any existing file before writing, so that we write a fresh file
+        # rather than appending to / modifying stale contents.
+        backup_file.unlink(missing_ok=True)
+        backup_file.write_text(data)
+        event.set_results({"written": data})
 
     def _on_demo_server_pebble_ready(self, event: ops.PebbleReadyEvent) -> None:
         """Define and start a workload using the Pebble API."""
