@@ -1,14 +1,13 @@
 # Copyright 2026 Charmer
 # See LICENSE file for licensing details.
 
-"""A demo relation wrapper library that correctly supports custom endpoint names.
+"""A demo relation wrapper library that does NOT support custom endpoint names.
 
-This is the ``DatabaseRequirer`` shown in the "Write a library" section of the
-Ops docs, with two adjustments: the constructor parameter is named ``endpoint``
-(to match the call signature used in the docs' "Test custom endpoint names"
-test, ``DatabaseRequirer(self, endpoint=endpoint)``), and the wrapper observes
-``charm.on[endpoint]`` -- that is, it honours the endpoint name passed in,
-which is what supporting custom endpoint names actually requires.
+This is the ``DatabaseRequirer`` shown verbatim in the "Write a library" section
+of the Ops docs (with the constructor parameter renamed from ``relation_name``
+to ``endpoint`` to match the docs' "Test custom endpoint names" test call
+signature). It observes ``charm.on['database']`` regardless of the endpoint name
+passed in -- that is, it does not honour the custom endpoint name.
 
 See: https://canonical.com/juju/docs/ops/latest/howto/manage-libraries
 """
@@ -48,14 +47,14 @@ class DatabaseRequirerEvents(ops.ObjectEvents):
 
 
 class DatabaseRequirer(ops.Object):
-    """Wrap the database relation endpoint, honouring the endpoint name."""
+    """Wrap the database relation endpoint, ignoring the endpoint name."""
 
     on = DatabaseRequirerEvents()
 
     def __init__(self, charm: ops.CharmBase, endpoint: str):
         super().__init__(charm, endpoint)
         self.framework.observe(
-            charm.on[endpoint].relation_changed, self._on_db_changed
+            charm.on['database'].relation_changed, self._on_db_changed
         )
 
     def _on_db_changed(self, event: ops.RelationChangedEvent):
