@@ -11,19 +11,24 @@ endpoint." That test only runs the ``start`` event and checks ``saw_start``, so
 it never exercises the relation endpoint and cannot tell whether the wrapper
 actually honours the custom endpoint name.
 
-This file runs the *same* genuine verification against two libraries:
+This file runs two parametrised tests against two libraries:
 
 * ``my_lib.DatabaseRequirer`` -- observes ``charm.on[endpoint]``, so it honours
-  the custom endpoint name. The test passes.
+  the custom endpoint name.
 * ``my_lib_broken.DatabaseRequirer`` -- observes ``charm.on['database']``
   regardless of the endpoint name passed in (this is the ``DatabaseRequirer``
-  shown verbatim in the docs' "Write a library" section). The test fails, and
-  is marked ``xfail`` so that CI stays green while still demonstrating the
-  failure.
+  shown verbatim in the docs' "Write a library" section).
 
-The verification: build a charm wrapping a custom-named endpoint, fire
-``relation_changed`` on that endpoint, and assert the wrapper's ``ready``
-custom event fires.
+The two tests:
+
+* ``test_docs_start_pattern`` reproduces the docs' verbatim test pattern (run
+  ``start``, check ``saw_start``). It **passes for both** libraries -- proving
+  the docs' test pattern cannot distinguish a wrapper that honours the custom
+  endpoint name from one that ignores it.
+* ``test_custom_endpoint_name_emits_ready`` is a genuine verification: fire
+  ``relation_changed`` on the custom endpoint and assert ``ready`` fires. It
+  passes for the correct library and **fails** for the broken one (marked
+  ``xfail`` so CI stays green while still demonstrating the failure).
 """
 
 import ops
@@ -34,6 +39,48 @@ from lib.charms.micron.v0.my_lib import DatabaseRequirer as CorrectDatabaseRequi
 from lib.charms.micron.v0.my_lib_broken import (
     DatabaseRequirer as BrokenDatabaseRequirer,
 )
+
+
+@pytest.mark.parametrize(
+    "requirer_cls",
+    [
+        pytest.param(CorrectDatabaseRequirer, id="honours_endpoint_name"),
+        pytest.param(BrokenDatabaseRequirer, id="ignores_endpoint_name"),
+    ],
+)
+def test_docs_start_pattern(requirer_cls):
+    """Reproduce the docs' verbatim "Test custom endpoint names" test pattern.
+
+    This runs the ``start`` event and checks ``saw_start``, exactly as the docs
+    show. It passes for *both* the correct and the broken library -- proving the
+    docs' test pattern cannot distinguish a wrapper that honours the custom
+    endpoint name from one that ignores it.
+    """
+
+    class MyTestCharm(ops.CharmBase):
+        META = {
+            "name": "my-charm",
+            "requires": {
+                "foo": {"interface": "my_interface"},
+                "database": {"interface": "my_interface"},
+            },
+        }
+
+        def __init__(self, framework: ops.Framework):
+            super().__init__(framework)
+            self.db = requirer_cls(self, endpoint="foo")
+            framework.observe(self.on.start, self._on_start)
+            self.saw_start = False
+
+        def _on_start(self, _):
+            self.saw_start = True
+
+    ctx = testing.Context(MyTestCharm, meta=MyTestCharm.META)
+    state_in = testing.State()
+
+    with ctx(ctx.on.start(), state_in) as mgr:
+        mgr.run()
+        assert mgr.charm.saw_start
 
 
 @pytest.mark.parametrize(
