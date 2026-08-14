@@ -22,6 +22,6 @@ jobs:
       configuration_profile: issue-feedback
       focus: general
       max_issues: 20
-      validate_only: true
+      dry_run: true
     secrets:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
