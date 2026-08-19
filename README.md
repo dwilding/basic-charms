@@ -14,7 +14,7 @@ To perform an adversarial test:
 
     The basic charms are a known-good starting point, whose tests pass by default. The PR applies changes on top of this starting point, which minimizes your review burden.
 
-    The PR will explain the chain of reasoning and how to interpret the test results. For example:I don
+    The PR will explain the chain of reasoning and how to interpret the test results. For example:
 
     > I added a unit test that [...], which is expected to fail, meaning I couldn't disprove what the documentation claims. In other words, the claim is correct.
 
