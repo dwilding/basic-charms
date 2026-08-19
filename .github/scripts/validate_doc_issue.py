@@ -187,7 +187,7 @@ When blocked, do not create files or make edits.
 Write the reasoning in plain, conversational English — the way you'd explain \
 it to a colleague. Avoid jargon-heavy or robotic phrasing. For example:
 
-> I added a unit test that [...], which is expected to fail, meaning that I \
+> I added a unit test that [...], which is expected to fail, meaning I \
 couldn't disprove what the documentation claims. In other words, the claim \
 is correct.
 
