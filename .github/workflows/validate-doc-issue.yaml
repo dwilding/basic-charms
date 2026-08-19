@@ -1,0 +1,186 @@
+name: Validate doc issue
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: Issue number describing the doc claim to validate
+        required: true
+        type: string
+      dry_run:
+        description: If true, print changed files without pushing or creating a PR
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: validate-doc-issue-${{ github.event.inputs.issue_number }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      ISSUE_NUMBER: ${{ github.event.inputs.issue_number }}
+      DRY_RUN: ${{ github.event.inputs.dry_run }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Disable git hooks
+        run: git config core.hooksPath /dev/null
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      - name: Install OpenCode
+        run: npm install -g opencode-ai@1.18.16
+
+      - name: Prepare issue context
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          issue_json=$(gh issue view "$ISSUE_NUMBER" --repo "$REPOSITORY" --json title,body,comments,author)
+          issue_title=$(jq -r '.title' <<< "$issue_json")
+          issue_author=$(jq -r '.author.login' <<< "$issue_json")
+          issue_body=$(jq -r '.body // ""' <<< "$issue_json")
+          comments=$(jq -r '
+            [.comments[] | "### @\(.author.login)\n\(.body // "")"] | join("\n\n")
+          ' <<< "$issue_json")
+          {
+            echo "# Issue #$ISSUE_NUMBER: $issue_title"
+            echo
+            echo "Author: @$issue_author"
+            echo
+            echo "## Description"
+            echo
+            echo "$issue_body"
+            echo
+            echo "## Comments"
+            echo
+            echo "$comments"
+          } > "$RUNNER_TEMP/issue-context.md"
+
+      - name: Run agent
+        id: agent
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          set -euo pipefail
+          branch="validate/issue-$ISSUE_NUMBER"
+          python3 .github/scripts/validate_doc_issue.py \
+            --issue-context "$RUNNER_TEMP/issue-context.md" \
+            --issue-number "$ISSUE_NUMBER" \
+            --repository "${{ github.repository }}" \
+            --branch "$branch" \
+            --repo-root "$GITHUB_WORKSPACE" \
+            --github-output "$GITHUB_OUTPUT" \
+            --reasoning-file "$RUNNER_TEMP/reasoning.md" \
+            --blocker-file "$RUNNER_TEMP/blocker.md" \
+            --timeout 300
+
+      - name: Enforce changed paths
+        id: enforce
+        if: steps.agent.outputs.decision == 'IMPLEMENT'
+        run: |
+          set -euo pipefail
+          default_branch=$(git remote show origin | grep 'HEAD branch' | awk '{print $NF}')
+          changed=$(git diff --name-only "origin/$default_branch" 2>/dev/null; git ls-files --others --exclude-standard)
+          if [ -z "$changed" ]; then
+            echo "::error::Agent returned IMPLEMENT but made no changes." >&2
+            exit 1
+          fi
+          offenders=""
+          for path in $changed; do
+            case "$path" in
+              kepler/*|kosmos/*|meteor/*|micron/*|libs/*) ;;
+              *)
+                offenders="${offenders}${path}"$'\n'
+                ;;
+            esac
+          done
+          if [ -n "$offenders" ]; then
+            echo "::error::Agent modified paths outside the allowed directories:" >&2
+            printf '%s' "$offenders" >&2
+            echo "Allowed: kepler/, kosmos/, meteor/, micron/, libs/" >&2
+            exit 1
+          fi
+          {
+            echo "changed_files<<EOF"
+            echo "$changed"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Dry run summary
+        if: steps.agent.outputs.decision == 'IMPLEMENT' && env.DRY_RUN == 'true'
+        run: |
+          echo "Dry run — would push branch validate/issue-$ISSUE_NUMBER with:"
+          echo "${{ steps.enforce.outputs.changed_files }}"
+
+      - name: Push branch and create PR
+        id: publish
+        if: steps.agent.outputs.decision == 'IMPLEMENT' && env.DRY_RUN != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          branch="validate/issue-$ISSUE_NUMBER"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${REPOSITORY}.git"
+          git checkout -B "$branch"
+          git add --all
+          git commit -m "Validate #$ISSUE_NUMBER"
+          git push --set-upstream origin "$branch"
+          # Derive a short title from the first line of the reasoning.
+          first_line=$(head -1 "$RUNNER_TEMP/reasoning.md")
+          title="verify: ${first_line:0:70}"
+          pr_url=$(gh pr create \
+            --repo "$REPOSITORY" \
+            --head "$branch" \
+            --title "$title" \
+            --body-file "$RUNNER_TEMP/reasoning.md")
+          echo "pr_url=$pr_url" >> "$GITHUB_OUTPUT"
+
+      - name: Comment on issue
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          decision="${{ steps.agent.outputs.decision }}"
+          if [ -z "$decision" ]; then
+            body="The doc-validation agent did not produce a result. Check the workflow logs."
+          elif [ "$decision" = "BLOCKED" ]; then
+            blocker=$(cat "$RUNNER_TEMP/blocker.md" 2>/dev/null || echo "unknown")
+            body="The doc-validation agent could not proceed.
+
+          **Blocker:** $blocker"
+          elif [ "$DRY_RUN" = "true" ]; then
+            body="The doc-validation agent prepared changes (dry run). Re-run with dry_run=false to create a PR."
+          else
+            pr_url="${{ steps.publish.outputs.pr_url }}"
+            body="The doc-validation agent opened a PR: $pr_url
+
+          Review the PR and inspect the CI runs to determine whether the doc was validated or refuted."
+          fi
+          gh issue comment "$ISSUE_NUMBER" --repo "$REPOSITORY" --body "$body"
