@@ -1,4 +1,4 @@
-name: zizmor
+name: Workflow checks
 
 on:
   pull_request:
@@ -15,17 +15,17 @@ jobs:
       security-events: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
       - name: Install uv
-        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
       - name: Run zizmor
-        run: uvx zizmor@1.25.2 --format=sarif . > workflows.sarif
+        run: uvx zizmor --format=sarif . > workflows.sarif
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Avoid rate limits for zizmor's "online" checks.
       - name: Upload SARIF file
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@9e3211c9a3b9311dfe05da2ed48eea3386f042dd  # v4.37.6
         with:
           sarif_file: workflows.sarif
           category: zizmor

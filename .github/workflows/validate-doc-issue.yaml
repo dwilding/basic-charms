@@ -30,7 +30,7 @@ jobs:
       DRY_RUN: ${{ github.event.inputs.dry_run }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -39,17 +39,17 @@ jobs:
         run: git config core.hooksPath /dev/null
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
         with:
           python-version: '3.12'
 
       - name: Set up Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
         with:
           node-version: '24'
 
       - name: Install OpenCode
-        run: npm install -g opencode-ai@1.18.16
+        run: npm install -g opencode-ai@1.18.16  # zizmor: ignore[adhoc-packages] pinned version, no lockfile available for global npm installs
 
       - name: Prepare issue context
         env:
@@ -130,9 +130,11 @@ jobs:
 
       - name: Dry run summary
         if: steps.agent.outputs.decision == 'IMPLEMENT' && env.DRY_RUN == 'true'
+        env:
+          CHANGED_FILES: ${{ steps.enforce.outputs.changed_files }}
         run: |
           echo "Dry run — would push branch validate/issue-$ISSUE_NUMBER with:"
-          echo "${{ steps.enforce.outputs.changed_files }}"
+          echo "$CHANGED_FILES"
 
       - name: Push branch and create PR
         id: publish
@@ -165,9 +167,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
+          DECISION: ${{ steps.agent.outputs.decision }}
+          PR_URL: ${{ steps.publish.outputs.pr_url }}
         run: |
           set -euo pipefail
-          decision="${{ steps.agent.outputs.decision }}"
+          decision="$DECISION"
           if [ -z "$decision" ]; then
             body="The doc-validation agent did not produce a result. Check the workflow logs."
           elif [ "$decision" = "BLOCKED" ]; then
@@ -178,8 +182,7 @@ jobs:
           elif [ "$DRY_RUN" = "true" ]; then
             body="The doc-validation agent prepared changes (dry run). Re-run with dry_run=false to create a PR."
           else
-            pr_url="${{ steps.publish.outputs.pr_url }}"
-            body="The doc-validation agent opened a PR: $pr_url
+            body="The doc-validation agent opened a PR: $PR_URL
 
           Review the PR and inspect the CI runs to determine whether the doc was validated or refuted."
           fi

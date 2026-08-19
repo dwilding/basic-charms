@@ -12,7 +12,7 @@ repos:
     hooks:
       - id: zizmor
         name: Run zizmor
-        entry: bash -c 'uvx zizmor@1.25.2 --format=sarif . > workflows.sarif'
+        entry: uvx zizmor .
         language: system
         pass_filenames: false
         always_run: true
