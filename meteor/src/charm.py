@@ -21,6 +21,7 @@ class MeteorCharm(ops.CharmBase):
         super().__init__(framework)
         framework.observe(self.on.install, self._on_install)
         framework.observe(self.on.start, self._on_start)
+        framework.observe(self.on['do-backup'].action, self._on_do_backup_action)
 
     def _on_install(self, event: ops.InstallEvent):
         """Install the workload on the machine."""
@@ -34,6 +35,13 @@ class MeteorCharm(ops.CharmBase):
         if version is not None:
             self.unit.set_workload_version(version)
         self.unit.status = ops.ActiveStatus()
+
+    def _on_do_backup_action(self, event: ops.ActionEvent):
+        """Handle the do-backup action.
+
+        The backup is not implemented, so the action always fails.
+        """
+        event.fail("sorry, couldn't do the backup")
 
 
 if __name__ == "__main__":  # pragma: nocover
