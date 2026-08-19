@@ -39,7 +39,7 @@ def test_do_backup_action_raises_action_failed():
     ctx = testing.Context(MeteorCharm)
 
     with pytest.raises(testing.ActionFailed) as exc_info:
-        ctx.run(ctx.on.action('do-backup'), testing.State())
+        ctx.run(ctx.on.action("do-backup"), testing.State())
 
     assert exc_info.value.message == "sorry, couldn't do the backup"
     # The output state is still available on the exception.

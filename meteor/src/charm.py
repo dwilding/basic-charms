@@ -21,7 +21,7 @@ class MeteorCharm(ops.CharmBase):
         super().__init__(framework)
         framework.observe(self.on.install, self._on_install)
         framework.observe(self.on.start, self._on_start)
-        framework.observe(self.on['do-backup'].action, self._on_do_backup_action)
+        framework.observe(self.on["do-backup"].action, self._on_do_backup_action)
 
     def _on_install(self, event: ops.InstallEvent):
         """Install the workload on the machine."""
