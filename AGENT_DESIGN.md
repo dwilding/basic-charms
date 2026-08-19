@@ -130,6 +130,8 @@ Manual dispatch only: no automatic triggers. The user explicitly chooses to run 
 
 `dry_run` default true: the workflow defaults to not pushing or creating PRs. The user explicitly sets `dry_run: false` to publish.
 
+Repository setting: the repo must have "Allow GitHub Actions to create and approve pull requests" enabled (Settings → Actions → General → Workflow permissions). This is the gate that lets the `GITHUB_TOKEN` create PRs. The workflow declares `pull-requests: write` in its `permissions:` block, but that alone is not enough — the repo-level flag must also be on. The default workflow permission should remain `read` (least privilege); each workflow declares its own `permissions:` block.
+
 ## Why `bash: deny`
 
 Every critical escape vector requires command execution. With `bash: allow`, an adversarial agent could:
