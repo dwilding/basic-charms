@@ -70,7 +70,7 @@ Five sections, composed by the Python script:
 2. Runtime context: repository, issue number, branch name.
 3. Task instructions: the adversarial testing strategy (see below).
 4. Untrusted content: issue title, body, comments, fetched docs, all wrapped in `<untrusted-content>` markers.
-5. Output contract: `IMPLEMENTATION_DECISION: IMPLEMENT` or `IMPLEMENTATION_DECISION: BLOCKED` followed by `IMPLEMENTATION_BLOCKER: <reason>`. When IMPLEMENT, also include `IMPLEMENTATION_REASONING:` — a concise chain of reasoning for the PR body (see below).
+5. Output contract: `IMPLEMENTATION_DECISION: IMPLEMENT` or `IMPLEMENTATION_DECISION: BLOCKED` followed by `IMPLEMENTATION_BLOCKER: <reason>`. When IMPLEMENT, also include `IMPLEMENTATION_REASONING:` — a concise chain of reasoning for the PR body, written in plain conversational English (see Voice below).
 
 The prompt is transported to OpenCode as a file (`--file prompt.md`), not as argv, to avoid OS argument length limits with large issue or docs content.
 
@@ -78,7 +78,7 @@ The prompt is transported to OpenCode as a file (`--file prompt.md`), not as arg
 
 The agent writes deterministic, reviewable tests that attempt to refute claims in the linked documentation. The tests run via CI on the PR to verify how things actually behave.
 
-Read the issue, read the linked docs, read the relevant charm code and tests. Identify a specific claim in the docs that can be tested. Write a test that attempts to prove the claim false.
+Read the issue, read the linked docs, read the relevant charm code and tests. Identify a specific claim in the docs that can be tested. Write a test that **refutes** the claim: it passes only if the claim is false, and fails (or xfails) if the claim is true. Do **not** write a confirming test that asserts the documented behaviour holds — that is not adversarial. For example, if the docs claim "`event.fail()` raises `ActionFailed` in unit tests", write a test asserting it does **not** raise (expected to fail), not one asserting it does.
 
 If the test should pass under one set of circumstances and fail under another, use `pytest.mark.xfail(strict=True)` to verify the failure case. This keeps CI green while still verifying the failure behaviour.
 
@@ -88,13 +88,17 @@ Do not break existing tests. Modify charms and tests minimally to add the advers
 
 The PR title is `verify: ` followed by the first line of the agent's reasoning (e.g. `verify: foo happens when bar is integrated with baz`).
 
-The PR body must contain the chain of reasoning so a reviewer can interpret the CI results. The agent writes: what the doc claims, what the PR tests, and the expected outcome. For example:
+The PR body must contain the chain of reasoning so a reviewer can interpret the CI results. The agent writes: what the doc claims, what the PR tests, and the expected outcome, in plain conversational English. For example:
 
 > **Exploratory PR — do not merge.**
 >
-> The doc at `<url>` claims: `<claim>`. This PR adds a test that attempts to prove `<not-claim>`. Expected outcome: the test passes, which would mean the docs are incorrect.
+> The doc at `<url>` claims: `<claim>`. I added a test that asserts `<not-claim>`, which is expected to fail, meaning I couldn't disprove what the documentation claims. In other words, the claim is correct.
 
 The reviewer inspects CI to determine the actual outcome. The PR body does not include `Closes #<n>` — the PR is not meant to merge, and the issue should not auto-close.
+
+## Voice
+
+The agent writes the reasoning in plain, conversational English — the way you'd explain it to a colleague. Avoid jargon-heavy or robotic phrasing. Prefer "I couldn't disprove" over "the test outcome is consistent with the hypothesis", "the claim is correct" over "the documented behaviour holds", and "I added a test that [...]" over "a test was added asserting [...]".
 
 ## Allowlist
 

@@ -156,8 +156,12 @@ actually behave.
 2. Read the relevant charm code and tests in kepler/, kosmos/, meteor/, \
 micron/, and libs/.
 3. Identify a specific claim in the documentation that can be tested.
-4. Write a test that attempts to prove the claim false. Modify charms and \
-tests minimally to add the adversarial test.
+4. Write a test that REFUTES the claim: it passes only if the claim is false, \
+and fails (or xfails) if the claim is true. Do NOT write a confirming test \
+that asserts the documented behaviour holds — that is not adversarial. For \
+example, if the docs claim "event.fail() raises ActionFailed in unit tests", \
+write a test asserting it does NOT raise (expected to fail), not one \
+asserting it does.
 5. If the test should pass under one set of circumstances and fail under \
 another, use pytest.mark.xfail(strict=True) to verify the failure case. This \
 keeps CI green while still verifying the failure behaviour.
@@ -177,6 +181,19 @@ State what the doc claims, what the PR tests, and the expected outcome.
 `IMPLEMENTATION_BLOCKER: <maintainer-actionable reason>`.
 
 When blocked, do not create files or make edits.
+
+## Voice
+
+Write the reasoning in plain, conversational English — the way you'd explain \
+it to a colleague. Avoid jargon-heavy or robotic phrasing. For example:
+
+> I added a unit test that [...], which is expected to fail, meaning that I \
+couldn't disprove what the documentation claims. In other words, the claim \
+is correct.
+
+Prefer "I couldn't disprove" over "the test outcome is consistent with the \
+hypothesis", "the claim is correct" over "the documented behaviour holds", \
+and "I added a test that [...]" over "a test was added asserting [...]".
 """
 
 
