@@ -42,24 +42,25 @@ The agent does not need bash. Its job is to write tests and charm changes. Valid
 2. Checkout with `persist-credentials: false`, `fetch-depth: 0`. No git credentials in `.git/config` during the agent run.
 3. `git config core.hooksPath /dev/null` — defense in depth, inert hooks.
 4. Setup Python 3.12, Node 24, install `opencode-ai@1.18.16`.
-5. Run `validate_doc_issue.py`:
-   - Fetch the issue via `gh issue view` (title, body, comments).
+5. Prepare issue context: fetch the issue via `gh issue view` (title, body, comments) and write it to a markdown file.
+6. Run `validate_doc_issue.py`:
+   - Read the issue context file.
    - Extract URLs from the issue and fetch linked documentation. Domain-allowlisted: `documentation.ubuntu.com`, `discourse.ubuntu.com`, `raw.githubusercontent.com`, `github.com`. Max 5 URLs, 64KB each.
    - Compose the prompt: system constraints, runtime context, task instructions, untrusted content (delimited), output contract.
    - Stage the agent: copy `.github/agent/validate-doc-issue.md` to `.opencode/agents/`.
    - Run OpenCode with a scrubbed environment: `PATH`, `HOME`, `USER`, `SHELL`, `LANG`, `OPENROUTER_API_KEY` only. No `GITHUB_TOKEN`, no `ACTIONS_ID_TOKEN_*`.
-   - Parse the decision: `IMPLEMENT` or `BLOCKED`. When `IMPLEMENT`, also parse `IMPLEMENTATION_REASONING`.
-6. Cleanup: remove `.opencode/agents/validate-doc-issue.md` so it does not appear as a changed path.
-7. If `BLOCKED`: comment on the issue with the blocker reason. Done.
-8. If `IMPLEMENT`: enforce changed paths (inline bash in the YAML, not a Python file the agent could tamper with).
+   - Parse the decision: `IMPLEMENT` or `BLOCKED`. When `IMPLEMENT`, also parse `IMPLEMENTATION_REASONING` and write it to a file. When `BLOCKED`, write the blocker to a file.
+7. Cleanup: remove `.opencode/agents/validate-doc-issue.md` so it does not appear as a changed path.
+8. If `BLOCKED`: comment on the issue with the blocker reason. Done.
+9. If `IMPLEMENT`: enforce changed paths (inline bash in the YAML, not a Python file the agent could tamper with).
    - Collect: `git diff --name-only` against the default branch, plus `git ls-files --others --exclude-standard` for untracked files.
    - Allow only paths starting with `kepler/`, `kosmos/`, `meteor/`, `micron/`, or `libs/`.
    - Reject if any path is outside those five directories. Reject if no changes.
-9. If `dry_run`: print the changed files. Done.
-10. Configure git credentials using `GITHUB_TOKEN` — only now, after enforcement passes and the agent has exited.
-11. `git add --all`, commit, push branch `validate/issue-<n>`.
-12. `gh pr create` with title prefixed `verify:` (e.g. `verify: foo happens when bar is integrated with baz`), the agent's reasoning as the PR body. The body does not include `Closes #<n>`.
-13. Comment on the issue with the PR link.
+10. If `dry_run`: print the changed files. Done.
+11. Configure git credentials using `GITHUB_TOKEN` — only now, after enforcement passes and the agent has exited.
+12. `git add --all`, commit, push branch `validate/issue-<n>`.
+13. `gh pr create` with title `verify: <first line of reasoning>`, the agent's reasoning file as the PR body. The body does not include `Closes #<n>`.
+14. Comment on the issue with the result (PR link, blocker, dry-run notice, or failure message). This step always runs.
 
 ## Prompt composition
 
@@ -85,7 +86,7 @@ Do not break existing tests. Modify charms and tests minimally to add the advers
 
 ## PR body
 
-The PR title is prefixed `verify:` followed by a short description of the claim being tested (e.g. `verify: foo happens when bar is integrated with baz`).
+The PR title is `verify: ` followed by the first line of the agent's reasoning (e.g. `verify: foo happens when bar is integrated with baz`).
 
 The PR body must contain the chain of reasoning so a reviewer can interpret the CI results. The agent writes: what the doc claims, what the PR tests, and the expected outcome. For example:
 
