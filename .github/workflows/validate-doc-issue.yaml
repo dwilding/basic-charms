@@ -4,14 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       issue_number:
-        description: Issue number describing the doc claim to validate
+        description: Issue number
         required: true
         type: string
-      dry_run:
-        description: If true, print changed files without pushing or creating a PR
-        required: false
-        default: true
-        type: boolean
 
 permissions:
   contents: write
@@ -27,7 +22,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       ISSUE_NUMBER: ${{ github.event.inputs.issue_number }}
-      DRY_RUN: ${{ github.event.inputs.dry_run }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -128,17 +122,9 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Dry run summary
-        if: steps.agent.outputs.decision == 'IMPLEMENT' && env.DRY_RUN == 'true'
-        env:
-          CHANGED_FILES: ${{ steps.enforce.outputs.changed_files }}
-        run: |
-          echo "Dry run — would push branch validate/issue-$ISSUE_NUMBER with:"
-          echo "$CHANGED_FILES"
-
       - name: Push branch and create PR
         id: publish
-        if: steps.agent.outputs.decision == 'IMPLEMENT' && env.DRY_RUN != 'true'
+        if: steps.agent.outputs.decision == 'IMPLEMENT'
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -179,8 +165,6 @@ jobs:
             body="The doc-validation agent could not proceed.
 
           **Blocker:** $blocker"
-          elif [ "$DRY_RUN" = "true" ]; then
-            body="The doc-validation agent prepared changes (dry run). Re-run with dry_run=false to create a PR."
           else
             body="The doc-validation agent opened a PR: $PR_URL
 
