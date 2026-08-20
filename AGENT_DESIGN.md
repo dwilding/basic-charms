@@ -38,7 +38,7 @@ The agent does not need bash. Its job is to write tests and charm changes. Valid
 
 ## Workflow flow
 
-1. `workflow_dispatch` with `issue_number` (required) and `dry_run` (default true).
+1. `workflow_dispatch` with `issue_number` (required).
 2. Checkout with `persist-credentials: false`, `fetch-depth: 0`. No git credentials in `.git/config` during the agent run.
 3. `git config core.hooksPath /dev/null` — defense in depth, inert hooks.
 4. Setup Python 3.12, Node 24, install `opencode-ai@1.18.16`.
@@ -56,11 +56,10 @@ The agent does not need bash. Its job is to write tests and charm changes. Valid
    - Collect: `git diff --name-only` against the default branch, plus `git ls-files --others --exclude-standard` for untracked files.
    - Allow only paths starting with `kepler/`, `kosmos/`, `meteor/`, `micron/`, or `libs/`.
    - Reject if any path is outside those five directories. Reject if no changes.
-10. If `dry_run`: print the changed files. Done.
-11. Configure git credentials using `GITHUB_TOKEN` — only now, after enforcement passes and the agent has exited.
-12. `git add --all`, commit, push branch `validate/issue-<n>`.
-13. `gh pr create` with title `verify: <first line of reasoning>`, the agent's reasoning file as the PR body. The body does not include `Closes #<n>`.
-14. Comment on the issue with the result (PR link, blocker, dry-run notice, or failure message). This step always runs.
+10. Configure git credentials using `GITHUB_TOKEN` — only now, after enforcement passes and the agent has exited.
+11. `git add --all`, commit, push branch `validate/issue-<n>`.
+12. `gh pr create` with title `verify: <first line of reasoning>`, the agent's reasoning file as the PR body. The body does not include `Closes #<n>`.
+13. Comment on the issue with the result (PR link, blocker, or failure message). This step always runs.
 
 ## Prompt composition
 
@@ -132,8 +131,6 @@ Agent staging and cleanup: agent file copied to `.opencode/agents/` before the r
 
 Manual dispatch only: no automatic triggers. The user explicitly chooses to run this.
 
-`dry_run` default true: the workflow defaults to not pushing or creating PRs. The user explicitly sets `dry_run: false` to publish.
-
 Repository setting: the repo must have "Allow GitHub Actions to create and approve pull requests" enabled (Settings → Actions → General → Workflow permissions). This is the gate that lets the `GITHUB_TOKEN` create PRs. The workflow declares `pull-requests: write` in its `permissions:` block, but that alone is not enough — the repo-level flag must also be on. The default workflow permission should remain `read` (least privilege); each workflow declares its own `permissions:` block.
 
 ## Why `bash: deny`
@@ -158,6 +155,20 @@ Agent reads committed secrets (e.g., a `.env` file in the repo): low. Cannot exf
 Agent makes subtle malicious changes (e.g., typosquat a dependency in `pyproject.toml`): medium. Mitigated by human PR review and dependency scanning.
 
 Prompt injection from issue or docs content: low-medium. Mitigated by `<untrusted-content>` delimiters and system constraints. The agent can only edit files, which are reviewed.
+
+## Dry-run mode (not implemented)
+
+The workflow has no dry-run mode. The workflow is manually dispatched (a human already chose to run it), the agent can return `BLOCKED` when it cannot proceed, and an unwanted PR is cheap to close and delete. A dry-run mode would add complexity across the input, env vars, conditional steps, and issue-comment branches for a mode whose main use is during initial development of the agent script.
+
+If dry-run is wanted later, implement it as follows:
+
+1. Add a `dry_run` input (boolean, default `true`) to the `workflow_dispatch` trigger.
+2. Expose it to the job as an env var, e.g. `DRY_RUN: ${{ github.event.inputs.dry_run }}`.
+3. Gate the "Push branch and create PR" step on `steps.agent.outputs.decision == 'IMPLEMENT' && env.DRY_RUN != 'true'`.
+4. Add a "Dry run summary" step (conditioned on `IMPLEMENT && DRY_RUN == 'true'`) that prints the changed files from `steps.enforce.outputs.changed_files` without pushing.
+5. In the "Comment on issue" step, add a branch for the dry-run case that tells the user to re-run with `dry_run=false` to create a PR.
+
+The Python script needs no changes — it only composes the prompt and parses the decision; dry-run is purely a workflow-level concern about whether to publish the agent's changes.
 
 Agent deletes critical files: low. Mitigated by human PR review.
 
