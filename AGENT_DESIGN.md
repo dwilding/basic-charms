@@ -2,13 +2,13 @@
 
 ## Goal
 
-A manually dispatched GitHub Action in `basic-charms` that reads an issue describing public charm-dev documentation, writes tests that attempt to refute the doc's claims, and opens a PR. The PR runs CI to verify how things actually behave. The user reviews the PR, inspects the CI results, and reads the agent's reasoning to determine whether the doc was validated or refuted. The PR is an artifact for review, not for merging.
+A manually dispatched GitHub Action in `basic-charms` that reads an issue describing public charm-dev documentation, writes tests that verify how things actually behave, and opens a PR. The agent is skeptical of the docs: it forms its own understanding of how the code behaves, writes a test asserting that understanding, and deduces what the CI result means for the doc. The user reviews the PR, inspects the CI results, and reads the agent's reasoning to determine whether the doc was validated or refuted. The PR is an artifact for review, not for merging.
 
 ## Files (all under `.github/`)
 
-- `.github/workflows/validate-doc-issue.yaml` — the workflow.
-- `.github/agent/validate-doc-issue.md` — OpenCode agent definition.
-- `.github/scripts/validate_doc_issue.py` — compose prompt, run OpenCode, parse decision.
+- `.github/workflows/probe-issue.yaml` — the workflow.
+- `.github/agent/probe-issue.md` — OpenCode agent definition.
+- `.github/scripts/probe_issue.py` — compose prompt, run OpenCode, parse decision.
 
 Everything the agent needs to run lives under `.github/`, which is hard-denied. The agent cannot modify its own guardrails, prompt, or enforcement code.
 
@@ -43,14 +43,14 @@ The agent does not need bash. Its job is to write tests and charm changes. Valid
 3. `git config core.hooksPath /dev/null` — defense in depth, inert hooks.
 4. Setup Python 3.12, Node 24, install `opencode-ai@1.18.16`.
 5. Prepare issue context: fetch the issue via `gh issue view` (title, body, comments) and write it to a markdown file.
-6. Run `validate_doc_issue.py`:
+6. Run `probe_issue.py`:
    - Read the issue context file.
    - Extract URLs from the issue and fetch linked documentation. Domain-allowlisted: `documentation.ubuntu.com`, `discourse.ubuntu.com`, `raw.githubusercontent.com`, `github.com`. Max 5 URLs, 64KB each.
    - Compose the prompt: system constraints, runtime context, task instructions, untrusted content (delimited), output contract.
-   - Stage the agent: copy `.github/agent/validate-doc-issue.md` to `.opencode/agents/`.
+   - Stage the agent: copy `.github/agent/probe-issue.md` to `.opencode/agents/`.
    - Run OpenCode with a scrubbed environment: `PATH`, `HOME`, `USER`, `SHELL`, `LANG`, `OPENROUTER_API_KEY` only. No `GITHUB_TOKEN`, no `ACTIONS_ID_TOKEN_*`.
-   - Parse the decision: `IMPLEMENT` or `BLOCKED`. When `IMPLEMENT`, also parse `IMPLEMENTATION_REASONING` and write it to a file. When `BLOCKED`, write the blocker to a file.
-7. Cleanup: remove `.opencode/agents/validate-doc-issue.md` so it does not appear as a changed path.
+   - Parse the decision: the happy path is the default. If an `IMPLEMENTATION_BLOCKER:` line is present, the decision is `BLOCKED` and the blocker text is written to a file. Otherwise the decision is `IMPLEMENT`; the `IMPLEMENTATION_REASONING:` text is required and written to a file — the reasoning is a core part of the adversarial approach, so its absence is a genuine failure, not something to paper over.
+7. Cleanup: remove `.opencode/agents/probe-issue.md` so it does not appear as a changed path.
 8. If `BLOCKED`: comment on the issue with the blocker reason. Done.
 9. If `IMPLEMENT`: enforce changed paths (inline bash in the YAML, not a Python file the agent could tamper with).
    - Collect: `git diff --name-only` against the default branch, plus `git ls-files --others --exclude-standard` for untracked files.
@@ -69,35 +69,44 @@ Five sections, composed by the Python script:
 2. Runtime context: repository, issue number, branch name.
 3. Task instructions: the adversarial testing strategy (see below).
 4. Untrusted content: issue title, body, comments, fetched docs, all wrapped in `<untrusted-content>` markers.
-5. Output contract: `IMPLEMENTATION_DECISION: IMPLEMENT` or `IMPLEMENTATION_DECISION: BLOCKED` followed by `IMPLEMENTATION_BLOCKER: <reason>`. When IMPLEMENT, also include `IMPLEMENTATION_REASONING:` — a concise chain of reasoning for the PR body, written in plain conversational English (see Voice below).
+5. Output contract: the happy path is the default — if the agent makes file changes, the workflow treats that as `IMPLEMENT` and proceeds to path enforcement, no marker required. The agent only emits `IMPLEMENTATION_BLOCKER: <reason>` when it cannot proceed. When implementing, `IMPLEMENTATION_REASONING:` is required — a concise chain of reasoning for the PR body, written in plain conversational English (see Voice below). The reasoning is a core part of the adversarial approach: the reviewer needs it to interpret the CI results, so the workflow fails the run if it is absent rather than opening a PR with a placeholder body.
 
 The prompt is transported to OpenCode as a file (`--file prompt.md`), not as argv, to avoid OS argument length limits with large issue or docs content.
 
 ## Adversarial testing strategy (task instructions)
 
-The agent writes deterministic, reviewable tests that attempt to refute claims in the linked documentation. The tests run via CI on the PR to verify how things actually behave.
+The agent is skeptical of the documentation. It does not trust the docs by default. It forms its own understanding of how the code behaves, writes a test asserting that understanding — aiming for passing CI — and deduces what the result means for the doc. There are two directions:
 
-Read the issue, read the linked docs, read the relevant charm code and tests. Identify a specific claim in the docs that can be tested. Write a test that **refutes** the claim: it passes only if the claim is false, and fails (or xfails) if the claim is true. Do **not** write a confirming test that asserts the documented behaviour holds — that is not adversarial. For example, if the docs claim "`event.fail()` raises `ActionFailed` in unit tests", write a test asserting it does **not** raise (expected to fail), not one asserting it does.
+- The agent's understanding contradicts the doc: it writes a test asserting what it believes is true (the opposite of the claim). If CI passes, the doc is incorrect.
+- The agent's understanding matches the doc: it writes a test asserting what it believes is true (which happens to be the claim). If CI passes, the doc is correct.
 
-If the test should pass under one set of circumstances and fail under another, use `pytest.mark.xfail(strict=True)` to verify the failure case. This keeps CI green while still verifying the failure behaviour.
+In both cases the agent is doing the same thing — asserting its own understanding, not trusting the doc. The PR description is what distinguishes the two: it states what the agent believed, what it tested, and what the CI result means for the doc.
 
-Do not break existing tests. Modify charms and tests minimally to add the adversarial test. The goal is a PR where CI passes and the test results reveal whether the doc's claim holds.
+Differential testing with `xfail`: sometimes a claim is best tested by showing that the **same** test behaves differently in two charms — e.g. it passes for charm A and fails for charm B. Write the identical test in both charms and mark the one expected to fail with `pytest.mark.xfail(strict=True)`. This keeps CI passing while demonstrating the behavioural difference. The reviewer must be able to confirm the two versions are identical modulo the marker, so do not vary anything else between them. `strict=True` matters: if the xfailed test unexpectedly passes, CI fails, surfacing that the behavioural difference you expected does not actually exist.
+
+Read the issue, read the linked docs, read the relevant charm code and tests. Identify a specific claim in the docs that can be tested. Write a test that asserts your understanding — aiming for passing CI. Do **not** write a test that merely echoes the documented behaviour without independent reasoning; that is not adversarial. For example, if the docs claim "`event.fail()` raises `ActionFailed` in unit tests" and you believe it does **not** raise, write a test asserting it does not raise (expected to pass). If you believe it **does** raise, write a test asserting it does (expected to pass).
+
+Do not break existing tests. Modify charms and tests minimally to add the test. The goal is a PR where CI passes and the reasoning explains what the result means for the doc.
 
 ## PR body
 
 The PR title is `verify: ` followed by the first line of the agent's reasoning (e.g. `verify: foo happens when bar is integrated with baz`).
 
-The PR body must contain the chain of reasoning so a reviewer can interpret the CI results. The agent writes: what the doc claims, what the PR tests, and the expected outcome, in plain conversational English. For example:
+The PR body must contain the chain of reasoning so a reviewer can interpret the CI results. The agent writes: what the doc claims, what it believes is true, what the PR tests, and what green (or red) CI means for the doc, in plain conversational English. The reasoning must cover both directions so the reviewer can interpret either outcome. For example:
 
 > **Exploratory PR — do not merge.**
 >
-> The doc at `<url>` claims: `<claim>`. I added a test that asserts `<not-claim>`, which is expected to fail, meaning I couldn't disprove what the documentation claims. In other words, the claim is correct.
+> The doc at `<url>` claims: `<claim>`. I believe the doc is wrong, so I added a test asserting `<what I believe is true>`, which is expected to pass. If CI passes, the doc is incorrect.
+>
+> Or, if the agent's understanding happens to match the doc:
+>
+> The doc at `<url>` claims: `<claim>`. I believe `<claim>` is true, so I added a test asserting it, which is expected to pass. If CI passes, the doc is correct.
 
 The reviewer inspects CI to determine the actual outcome. The PR body does not include `Closes #<n>` — the PR is not meant to merge, and the issue should not auto-close.
 
 ## Voice
 
-The agent writes the reasoning in plain, conversational English — the way you'd explain it to a colleague. Avoid jargon-heavy or robotic phrasing. Prefer "I couldn't disprove" over "the test outcome is consistent with the hypothesis", "the claim is correct" over "the documented behaviour holds", and "I added a test that [...]" over "a test was added asserting [...]".
+The agent writes the reasoning in plain, conversational English — the way you'd explain it to a colleague. Avoid jargon-heavy or robotic phrasing. Prefer "I believe" over "the hypothesis is", "the doc is wrong" over "the documented behaviour does not hold", and "I added a test that [...]" over "a test was added asserting [...]".
 
 ## Allowlist
 

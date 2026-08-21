@@ -1,4 +1,4 @@
-name: Validate doc issue
+name: Probe issue
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: validate-doc-issue-${{ github.event.inputs.issue_number }}
+  group: probe-issue-${{ github.event.inputs.issue_number }}
   cancel-in-progress: false
 
 jobs:
@@ -79,7 +79,7 @@ jobs:
         run: |
           set -euo pipefail
           branch="validate/issue-$ISSUE_NUMBER"
-          python3 .github/scripts/validate_doc_issue.py \
+          python3 .github/scripts/probe_issue.py \
             --issue-context "$RUNNER_TEMP/issue-context.md" \
             --issue-number "$ISSUE_NUMBER" \
             --repository "${{ github.repository }}" \
