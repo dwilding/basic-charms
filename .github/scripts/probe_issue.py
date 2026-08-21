@@ -322,14 +322,20 @@ def run_opencode(
             "--",
             OPENCODE_PROMPT_MESSAGE,
         ]
-        proc = subprocess.run(  # noqa: S603
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            env=scrubbed_env(),
-        )
-        return proc.returncode, proc.stdout, proc.stderr
+        try:
+            proc = subprocess.run(  # noqa: S603
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                env=scrubbed_env(),
+            )
+            return proc.returncode, proc.stdout, proc.stderr
+        except subprocess.TimeoutExpired:
+            # 124 is the conventional timeout exit code. The caller handles
+            # this by writing a BLOCKED decision so the issue gets a clear
+            # comment instead of a bare workflow failure.
+            return 124, "", f"OpenCode timed out after {timeout} seconds."
 
 
 # ---------------------------------------------------------------------------
@@ -431,8 +437,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--timeout",
         type=int,
-        default=300,
-        help="OpenCode timeout in seconds.",
+        default=1200,
+        help="OpenCode timeout in seconds (default 20 minutes).",
     )
     args = parser.parse_args(argv)
 
@@ -466,6 +472,31 @@ def main(argv: list[str] | None = None) -> int:
         cleanup_agent(staged)
 
     if rc != 0:
+        if rc == 124:
+            # Timeout is a clean BLOCKED, not a system failure: the system
+            # detected the timeout and reported it. Exit 0 so the workflow
+            # is green and the issue gets a useful comment via the BLOCKED
+            # branch (enforcement/PR steps are skipped because decision !=
+            # IMPLEMENT).
+            print(
+                f"::error::OpenCode timed out after {args.timeout} seconds. "
+                "Consider re-running with a larger --timeout.",
+                file=sys.stderr,
+            )
+            if args.blocker_file:
+                args.blocker_file.write_text(
+                    f"OpenCode timed out after {args.timeout} seconds.",
+                    encoding="utf-8",
+                )
+            if args.github_output:
+                write_github_output(
+                    args.github_output,
+                    {
+                        "decision": "BLOCKED",
+                        "blocker": f"OpenCode timed out after {args.timeout} seconds.",
+                    },
+                )
+            return 0
         print(f"::error::OpenCode exited with status {rc}.", file=sys.stderr)
         if stderr:
             print(stderr, file=sys.stderr)
