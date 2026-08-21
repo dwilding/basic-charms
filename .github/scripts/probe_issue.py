@@ -148,23 +148,54 @@ def runtime_context(repository: str, issue_number: int, branch: str) -> str:
 TASK_INSTRUCTIONS = """\
 ## Task instructions
 
-You write deterministic, reviewable tests that attempt to refute claims in the \
-linked documentation. The tests run via CI on the PR to verify how things \
-actually behave.
+You write deterministic, reviewable tests that run via CI on the PR.
+
+### Core principle
+
+You are skeptical of the documentation. You do not trust it. You \
+form your own understanding of how the code actually behaves, write a test \
+asserting that understanding — aiming for passing CI — and then deduce what the \
+result means for the doc's claim.
+
+There are two directions:
+
+- Your understanding contradicts the doc: write a test asserting what you \
+believe is true (the opposite of the claim). If CI passes, the doc is \
+incorrect.
+- Your understanding matches the doc: write a test asserting what you believe \
+is true (which happens to be the claim). If CI passes, the doc is correct.
+
+In both cases you are doing the same thing — asserting your own understanding, \
+not trusting the doc. The PR description is what distinguishes the two: it \
+states what you believed, what you tested, and what the CI result means for the \
+doc.
+
+### Differential testing with xfail
+
+Sometimes a claim is best tested by showing that the SAME test behaves \
+differently in two charms — e.g. it passes for charm A and fails for charm B. \
+Write the identical test in both charms and mark the one expected to fail with \
+pytest.mark.xfail(strict=True). This keeps CI passing while demonstrating the \
+behavioural difference. The reviewer must be able to confirm the two versions \
+are identical modulo the marker — so do not vary anything else between them. \
+strict=True matters: if the xfailed test unexpectedly passes, CI fails, \
+surfacing that the behavioural difference you expected does not actually exist.
+
+### Steps
 
 1. Read the issue and the linked documentation inside <untrusted-content>.
 2. Read the relevant charm code and tests in kepler/, kosmos/, meteor/, \
 micron/, and libs/.
 3. Identify a specific claim in the documentation that can be tested.
-4. Write a test that REFUTES the claim: it passes only if the claim is false, \
-and fails (or xfails) if the claim is true. Do NOT write a confirming test \
-that asserts the documented behaviour holds — that is not adversarial. For \
-example, if the docs claim "event.fail() raises ActionFailed in unit tests", \
-write a test asserting it does NOT raise (expected to fail), not one \
-asserting it does.
-5. If the test should pass under one set of circumstances and fail under \
-another, use pytest.mark.xfail(strict=True) to verify the failure case. This \
-keeps CI green while still verifying the failure behaviour.
+4. Write a test that asserts your understanding — aiming for passing CI. Do \
+NOT write a test that merely echoes the documented behaviour without \
+independent reasoning; that is not adversarial. For example, if the docs \
+claim "event.fail() raises ActionFailed in unit tests" and you believe it \
+does NOT raise, write a test asserting it does not raise (expected to pass). \
+If you believe it DOES raise, write a test asserting it does (expected to \
+pass).
+5. For differential testing across two charms, see the "Differential testing \
+with xfail" section above.
 6. Do not break existing tests.
 """
 
@@ -172,28 +203,37 @@ keeps CI green while still verifying the failure behaviour.
 OUTPUT_CONTRACT = """\
 ## Output contract (non-overrideable)
 
-Return exactly one decision line, then the requested detail:
+The happy path is the default: if you make file changes, the workflow treats \
+that as IMPLEMENT and proceeds to path enforcement — no marker required. Only \
+emit a marker when you cannot proceed:
 
-- `IMPLEMENTATION_DECISION: IMPLEMENT` followed by \
-`IMPLEMENTATION_REASONING:` — a concise chain of reasoning for the PR body. \
-State what the doc claims, what the PR tests, and the expected outcome.
-- `IMPLEMENTATION_DECISION: BLOCKED` followed by \
-`IMPLEMENTATION_BLOCKER: <maintainer-actionable reason>`.
+- `IMPLEMENTATION_BLOCKER: <maintainer-actionable reason>` — when you cannot \
+proceed. Do not create files or make edits when blocked.
 
-When blocked, do not create files or make edits.
+When you implement, `IMPLEMENTATION_REASONING:` is required — the reasoning is \
+a core part of the adversarial approach: the reviewer needs it to interpret the \
+CI results. State what the doc claims, what you believe is true, what the PR \
+tests, and what green (or red) CI means for the doc. Without it, the workflow \
+fails the run rather than opening a PR with a placeholder body.
 
 ## Voice
 
 Write the reasoning in plain, conversational English — the way you'd explain \
-it to a colleague. Avoid jargon-heavy or robotic phrasing. For example:
+it to a colleague. Avoid jargon-heavy or robotic phrasing. Cover both \
+directions so the reviewer can interpret either outcome. For example:
 
-> I added a unit test that [...], which is expected to fail, meaning I \
-couldn't disprove what the documentation claims. In other words, the claim \
-is correct.
+> I believe the doc is wrong about `<claim>`. I added a test asserting \
+`<what I believe is true>`, which is expected to pass. If CI passes, the \
+doc is incorrect.
+>
+> Or, if your understanding happens to match the doc:
+>
+> I believe `<claim>` is true. I added a test asserting it, which is \
+expected to pass. If CI passes, the doc is correct.
 
-Prefer "I couldn't disprove" over "the test outcome is consistent with the \
-hypothesis", "the claim is correct" over "the documented behaviour holds", \
-and "I added a test that [...]" over "a test was added asserting [...]".
+Prefer "I believe" over "the hypothesis is", "the doc is wrong" over "the \
+documented behaviour does not hold", and "I added a test that [...]" over "a \
+test was added asserting [...]".
 """
 
 
@@ -232,10 +272,10 @@ def compose_prompt(
 
 def stage_agent(repo_root: Path) -> Path:
     """Copy the agent definition into .opencode/agents/. Return the staged path."""
-    src = repo_root / ".github" / "agent" / "validate-doc-issue.md"
+    src = repo_root / ".github" / "agent" / "probe-issue.md"
     agents_dir = repo_root / ".opencode" / "agents"
     agents_dir.mkdir(parents=True, exist_ok=True)
-    dest = agents_dir / "validate-doc-issue.md"
+    dest = agents_dir / "probe-issue.md"
     shutil.copy2(src, dest)
     return dest
 
@@ -297,51 +337,42 @@ def run_opencode(
 # ---------------------------------------------------------------------------
 
 def parse_decision(output: str) -> dict[str, str]:
-    """Parse the IMPLEMENT/BLOCKED decision and reasoning from OpenCode output."""
-    decision_match = re.search(
-        r"^IMPLEMENTATION_DECISION:\s*(IMPLEMENT|BLOCKED)\s*$",
+    """Parse the decision from OpenCode output.
+
+    The blocker is the explicit opt-out: if an `IMPLEMENTATION_BLOCKER:` line is
+    present, the decision is BLOCKED. Otherwise the decision is IMPLEMENT (the
+    happy path is the default), and the reasoning is taken from the required
+    `IMPLEMENTATION_REASONING:` line. The reasoning is a core part of the
+    adversarial approach — the reviewer needs it to interpret the CI results —
+    so its absence is a genuine failure, not something to paper over.
+    """
+    blocker_match = re.search(
+        r"^IMPLEMENTATION_BLOCKER:\s*(.+?)\s*$",
         output,
-        re.MULTILINE,
+        re.MULTILINE | re.DOTALL,
     )
-    if not decision_match:
+    if blocker_match:
+        blocker = blocker_match.group(1).strip()
+        if not blocker:
+            raise ValueError("IMPLEMENTATION_BLOCKER must not be empty.")
+        return {"decision": "BLOCKED", "blocker": blocker}
+
+    reasoning_match = re.search(
+        r"^IMPLEMENTATION_REASONING:\s*(.*)$",
+        output,
+        re.MULTILINE | re.DOTALL,
+    )
+    if not reasoning_match:
         raise ValueError(
-            "Output does not contain a valid IMPLEMENTATION_DECISION line. "
-            "Expected 'IMPLEMENTATION_DECISION: IMPLEMENT' or "
-            "'IMPLEMENTATION_DECISION: BLOCKED'."
+            "IMPLEMENT requires an IMPLEMENTATION_REASONING line. The reasoning "
+            "is a core part of the adversarial approach — the reviewer needs it to "
+            "interpret the CI results. If the agent stopped without one, that is a "
+            "genuine failure worth investigating, not something to paper over."
         )
-    decision = decision_match.group(1)
-    result: dict[str, str] = {"decision": decision}
-
-    if decision == "BLOCKED":
-        blocker_match = re.search(
-            r"^IMPLEMENTATION_BLOCKER:\s*(.+?)\s*$",
-            output,
-            re.MULTILINE,
-        )
-        if not blocker_match:
-            raise ValueError(
-                "BLOCKED decision requires an IMPLEMENTATION_BLOCKER line."
-            )
-        result["blocker"] = blocker_match.group(1)
-    else:
-        reasoning_match = re.search(
-            r"^IMPLEMENTATION_REASONING:\s*(.*)$",
-            output,
-            re.MULTILINE | re.DOTALL,
-        )
-        if not reasoning_match:
-            raise ValueError(
-                "IMPLEMENT decision requires an IMPLEMENTATION_REASONING line."
-            )
-        # Reasoning may span multiple lines; capture until the next known
-        # field or end of output. The DOTALL regex above captures the rest;
-        # trim trailing whitespace.
-        reasoning = reasoning_match.group(1).strip()
-        if not reasoning:
-            raise ValueError("IMPLEMENTATION_REASONING must not be empty.")
-        result["reasoning"] = reasoning
-
-    return result
+    reasoning = reasoning_match.group(1).strip()
+    if not reasoning:
+        raise ValueError("IMPLEMENTATION_REASONING must not be empty.")
+    return {"decision": "IMPLEMENT", "reasoning": reasoning}
 
 
 # ---------------------------------------------------------------------------
@@ -427,7 +458,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         rc, stdout, stderr = run_opencode(
             repo_root=args.repo_root,
-            agent_name="validate-doc-issue",
+            agent_name="probe-issue",
             prompt=prompt,
             timeout=args.timeout,
         )
@@ -458,7 +489,7 @@ def main(argv: list[str] | None = None) -> int:
     if result["decision"] == "BLOCKED" and args.blocker_file:
         args.blocker_file.write_text(result["blocker"], encoding="utf-8")
 
-    print(f"IMPLEMENTATION_DECISION: {result['decision']}")
+    print(f"DECISION: {result['decision']}")
     if result["decision"] == "BLOCKED":
         print(f"IMPLEMENTATION_BLOCKER: {result['blocker']}")
     else:
