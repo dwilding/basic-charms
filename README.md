@@ -4,7 +4,7 @@ To perform an adversarial test:
 
 1. Identify a portion of documentation you want to test. Try to focus on a specific claim in the docs, not something like "this section is poor".
 
-2. Open an issue in `basic-charms` with a link to the documentation page and a description of the claim you want to test. This could be a quote from the page or an explanation of something the page implies.
+2. Create an issue in `basic-charms` with a link to the documentation page and a description of the claim you want to test. This could be a quote from the page or an explanation of something the page implies.
 
 3. Run the [Probe issue](https://github.com/dwilding/basic-charms/actions/workflows/probe-issue.yaml) workflow, entering the issue number in the **Run workflow** UI.
 
@@ -14,7 +14,7 @@ To perform an adversarial test:
 
     The basic charms are a known-good starting point, whose tests pass by default. The PR applies changes on top of this starting point, which minimizes your review burden.
 
-    The agent doesn't trust the doc by default. It forms its own understanding of how the code behaves, writes a test asserting that understanding (aiming for passing CI), and the PR description explains what the result means for the doc. For example:
+    The agent doesn't trust the doc. It forms its own understanding of how the code behaves, then creates a PR as an attempt to prove its understanding — aiming for passing CI. The PR description explains what the result means for the doc. For example:
 
     > I believe the doc is wrong about `<claim>`. I added a test asserting `<what I believe is true>`, which is expected to pass. If CI passes, the doc is incorrect.
 

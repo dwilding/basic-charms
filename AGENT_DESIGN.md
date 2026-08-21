@@ -75,7 +75,7 @@ The prompt is transported to OpenCode as a file (`--file prompt.md`), not as arg
 
 ## Adversarial testing strategy (task instructions)
 
-The agent is skeptical of the documentation. It does not trust the docs by default. It forms its own understanding of how the code behaves, writes a test asserting that understanding — aiming for passing CI — and deduces what the result means for the doc. There are two directions:
+The agent is skeptical of the documentation. It does not trust the docs. It forms its own understanding of how the code behaves, writes a test asserting that understanding — aiming for passing CI — and deduces what the result means for the doc. There are two directions:
 
 - The agent's understanding contradicts the doc: it writes a test asserting what it believes is true (the opposite of the claim). If CI passes, the doc is incorrect.
 - The agent's understanding matches the doc: it writes a test asserting what it believes is true (which happens to be the claim). If CI passes, the doc is correct.
