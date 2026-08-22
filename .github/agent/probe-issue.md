@@ -79,9 +79,8 @@ documentation to validate.
    so you can fix any failures and call it again. The container has no secrets
    and no access to .git/, so even if tox.ini or test files contain injected
    commands, they cannot escape. After you exit, the workflow enforces the
-   path allowlist and creates the PR. CI checks on the PR are gated behind
-   reviewer approval — the reviewer must inspect the changes and approve the
-   pending deployment before CI runs. Follow the ruff, codespell, and
+   path allowlist and creates the PR as a draft. CI checks don't run until
+   the reviewer marks the PR ready for review. Follow the ruff, codespell, and
    pyright configuration in each charm's `pyproject.toml`. Common pitfalls:
    unused imports, lines over 99 chars, missing docstrings on public functions,
    misspelled words flagged by codespell. If you add a new test file, it needs
