@@ -163,8 +163,6 @@ def start_container(
         f"{python_dir}:/python:ro",
         f"{site_packages_dir}:/venv:ro",
         f"{uv_binary}:/usr/local/bin/uv:ro",
-        "--tmpfs",
-        "/tmp:mode=1777",
     ]
     for charm_dir in CHARM_DIRS:
         host_path = repo_root / charm_dir
@@ -182,6 +180,8 @@ def start_container(
         "-d",
         "--network",
         "bridge",
+        "--tmpfs",
+        "/tmp:mode=1777",
         "-e",
         "PYTHONPATH=/venv:/charm",
         "-e",
@@ -196,10 +196,7 @@ def start_container(
         "HOME=/tmp",
     ]
     for mount in mounts:
-        if mount.startswith("--"):
-            cmd.append(mount)
-        else:
-            cmd.extend(["-v", mount])
+        cmd.extend(["-v", mount])
     cmd.append(CONTAINER_IMAGE)
     cmd.extend([f"/python/bin/{py_bin_name}", "-c", "import time; time.sleep(999999)"])
 
