@@ -135,16 +135,20 @@ jobs:
           git checkout -B "$branch"
           git add --all
           git commit -m "Probe #$ISSUE_NUMBER"
-          git push --set-upstream origin "$branch"
+          git push --force --set-upstream origin "$branch"
           # Derive a short title from the first line of the reasoning.
           first_line=$(head -1 "$RUNNER_TEMP/reasoning.md")
           title="verify: ${first_line:0:70}"
+          # Create the PR, or update if it already exists.
           pr_url=$(gh pr create \
             --repo "$REPOSITORY" \
             --head "$branch" \
             --title "$title" \
             --body-file "$RUNNER_TEMP/reasoning.md" \
-            --draft)
+            --draft 2>/dev/null || \
+            gh pr edit --repo "$REPOSITORY" "$branch" \
+            --title "$title" \
+            --body-file "$RUNNER_TEMP/reasoning.md")
           echo "pr_url=$pr_url" >> "$GITHUB_OUTPUT"
           # Comment on the PR telling the reviewer how to run CI.
           gh pr comment "$pr_url" --body "This PR is a draft. Inspect the changes, then mark it ready for review to run CI."
