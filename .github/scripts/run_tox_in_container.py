@@ -66,6 +66,20 @@ def find_uv_binary() -> str:
     return uv
 
 
+def find_node_dir() -> Path | None:
+    """Find the Node.js installation directory on the host.
+
+    setup-node installs to /opt/hostedtoolcache/node/<version>/x64.
+    Returns None if not found — pyright will then try to download Node.js
+    via nodeenv, which may fail in the container.
+    """
+    node = shutil.which("node")
+    if node is None:
+        return None
+    # node is at <dir>/bin/node — return the parent of bin/.
+    return Path(node).parent.parent
+
+
 def find_uv_python(version: str) -> Path:
     """Find the uv-managed Python directory for the given version.
 
@@ -142,6 +156,7 @@ def start_container(
     uv_binary: str,
     repo_root: Path,
     libs_exists: bool,
+    node_dir: Path | None = None,
 ) -> str:
     """Start the Docker container with bind mounts. Returns the container name."""
     # Check Docker is available before trying to use it.
@@ -164,6 +179,9 @@ def start_container(
         f"{site_packages_dir}:/venv:ro",
         f"{uv_binary}:/usr/local/bin/uv:ro",
     ]
+    # Bind-mount Node.js so pyright's nodeenv finds it and skips downloading.
+    if node_dir is not None:
+        mounts.append(f"{node_dir}:/node:ro")
     for charm_dir in CHARM_DIRS:
         host_path = repo_root / charm_dir
         if host_path.is_dir():
@@ -187,7 +205,7 @@ def start_container(
         "-e",
         "PYTHONPATH=/venv:/charm",
         "-e",
-        "PATH=/usr/local/bin:/usr/bin:/bin",
+        "PATH=/usr/local/bin:/usr/bin:/bin:/node/bin",
         "-e",
         "UV_CACHE_DIR=/tmp/uv-cache",
         "-e",
@@ -302,6 +320,7 @@ def run_tox(
         uv_binary = find_uv_binary()
         py_dir = find_uv_python("3.10")
         py_name = python_bin_name(py_dir)
+        node_dir = find_node_dir()
 
         with tempfile.TemporaryDirectory(prefix="tox-venv-") as venv_tmpdir:
             venv_path = Path(venv_tmpdir) / "venv"
@@ -321,6 +340,7 @@ def run_tox(
                     uv_binary=uv_binary,
                     repo_root=repo_root,
                     libs_exists=libs_exists,
+                    node_dir=node_dir,
                 )
                 failed, output = run_tox_in_charm(
                     container_name=container_name,
