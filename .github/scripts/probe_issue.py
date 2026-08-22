@@ -197,18 +197,21 @@ pass).
 5. For differential testing across two charms, see the "Differential testing \
 with xfail" section above.
 6. Do not break existing tests.
-7. You have a `run_tox` tool that runs `tox -e format,lint,unit` for a \
-single charm inside an isolated Docker container. Call it for each charm \
-you modify to validate your changes — the tool returns the full tox output \
-so you can fix any failures and call it again. The container has no secrets \
-and no access to .git/, so even if tox.ini or test files contain injected \
-commands, they cannot escape. After you exit, the workflow enforces the path \
-allowlist and creates the PR as a draft. CI checks don't run until \
-the reviewer marks the PR ready for review. Follow the ruff, codespell, and pyright \
-configuration in each charm's `pyproject.toml`. Common pitfalls: unused \
-imports, lines over 99 chars, missing docstrings on public functions, \
-misspelled words flagged by codespell. If you add a new test file, it needs \
-the standard copyright header and a module docstring.
+7. **Call `run_tox` for every charm you modified.** This is mandatory — do \
+not skip it. The tool runs `tox -e format,lint,unit` inside an isolated \
+Docker container and returns the full output. Fix any failures it reports \
+and call it again until it passes. Do not emit `IMPLEMENTATION_REASONING:` \
+until `run_tox` passes for all modified charms. If `run_tox` fails and you \
+cannot fix the issue, emit `IMPLEMENTATION_BLOCKER:` instead.
+8. Follow the ruff, codespell, and pyright configuration in each charm's \
+`pyproject.toml`. Common pitfalls: unused imports, lines over 99 chars, \
+missing docstrings on public functions, misspelled words flagged by \
+codespell, and pyright type errors on optional values (use `assert x is not \
+None` before accessing members). If you add a new test file, it needs the \
+standard copyright header and a module docstring.
+9. After you exit, the workflow enforces the path allowlist and creates the \
+PR as a draft. CI checks don't run until the reviewer marks the PR ready for \
+review.
 """
 
 
@@ -226,7 +229,11 @@ When you implement, `IMPLEMENTATION_REASONING:` is required — the reasoning is
 a core part of the adversarial approach: the reviewer needs it to interpret the \
 CI results. State what the doc claims, what you believe is true, what the PR \
 tests, and what green (or red) CI means for the doc. Without it, the workflow \
-fails the run rather than opening a PR with a placeholder body.
+fails the run rather than opening a PR with a placeholder body. \
+\
+**You must call `run_tox` for every charm you modify and confirm it passes \
+before emitting `IMPLEMENTATION_REASONING:`.** If `run_tox` fails and you \
+cannot fix the issue, emit `IMPLEMENTATION_BLOCKER:` instead.
 
 ## Voice
 
