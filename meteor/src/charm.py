@@ -21,6 +21,7 @@ class MeteorCharm(ops.CharmBase):
         super().__init__(framework)
         framework.observe(self.on.install, self._on_install)
         framework.observe(self.on.start, self._on_start)
+        framework.observe(self.on["snapshot"].action, self._on_snapshot_action)
 
     def _on_install(self, event: ops.InstallEvent):
         """Install the workload on the machine."""
@@ -34,6 +35,21 @@ class MeteorCharm(ops.CharmBase):
         if version is not None:
             self.unit.set_workload_version(version)
         self.unit.status = ops.ActiveStatus()
+
+    def _on_snapshot_action(self, event: ops.ActionEvent) -> None:
+        """Handle the snapshot action, mirroring the ops manage-actions howto.
+
+        The howto's handler ends with ``event.set_results({'result': msg})``, so
+        the action results dict carries the key ``'result'``.
+        """
+        # The howto uses event.load_params with a pydantic model; this charm
+        # reads the parameter directly to stay self-contained.
+        filename = str(event.params["filename"])
+        # Let the user know we're working on it.
+        event.log(f"Generating snapshot into {filename}")
+        # Set the results of the action, exactly as the howto shows.
+        msg = f"Stored snapshot in {filename}."
+        event.set_results({"result": msg})
 
 
 if __name__ == "__main__":  # pragma: nocover
