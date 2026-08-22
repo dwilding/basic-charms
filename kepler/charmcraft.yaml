@@ -47,6 +47,17 @@ containers:
   demo-server:
     resource: demo-server-image
 
+actions:
+  snapshot:
+    description: Take a snapshot of the database.
+    params:
+      filename:
+        type: string
+        description: The name of the snapshot file.
+    required:
+      - filename
+    additionalProperties: false
+
 resources:
   # An OCI image resource for the container listed above.
   demo-server-image:

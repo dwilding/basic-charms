@@ -31,6 +31,23 @@ class KosmosCharm(ops.CharmBase):
         super().__init__(framework)
         self.pebble_service_name = "fastapi-service"
         framework.observe(self.on["demo-server"].pebble_ready, self._on_demo_server_pebble_ready)
+        framework.observe(self.on["snapshot"].action, self._on_snapshot_action)
+
+    def _on_snapshot_action(self, event: ops.ActionEvent) -> None:
+        """Handle the snapshot action, mirroring the ops docs example."""
+        filename = event.params["filename"]
+        event.log(f"Generating snapshot into {filename}")
+        success = self.do_snapshot(filename=filename)
+        if not success:
+            event.fail("Failed to generate snapshot.")
+            return
+        msg = f"Stored snapshot in {filename}."
+        event.set_results({"result": msg})
+
+    def do_snapshot(self, *, filename: str) -> bool:
+        """Pretend to take a snapshot of the database."""
+        del filename  # Unused in this demo stub.
+        return True
 
     def _on_demo_server_pebble_ready(self, event: ops.PebbleReadyEvent) -> None:
         """Define and start a workload using the Pebble API."""
