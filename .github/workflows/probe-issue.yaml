@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  validate:
+  probe:
     runs-on: ubuntu-latest
     env:
       ISSUE_NUMBER: ${{ github.event.inputs.issue_number }}
@@ -32,11 +32,6 @@ jobs:
       - name: Disable git hooks
         run: git config core.hooksPath /dev/null
 
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
-        with:
-          python-version: '3.12'
-
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
         with:
@@ -44,6 +39,9 @@ jobs:
 
       - name: Install OpenCode
         run: npm install -g opencode-ai@1.18.16  # zizmor: ignore[adhoc-packages] pinned version, no lockfile available for global npm installs
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
 
       - name: Prepare issue context
         env:
@@ -78,8 +76,8 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
           set -euo pipefail
-          branch="validate/issue-$ISSUE_NUMBER"
-          python3 .github/scripts/probe_issue.py \
+          branch="probe/issue-$ISSUE_NUMBER"
+          uv run --script .github/scripts/probe_issue.py \
             --issue-context "$RUNNER_TEMP/issue-context.md" \
             --issue-number "$ISSUE_NUMBER" \
             --repository "${{ github.repository }}" \
@@ -88,7 +86,7 @@ jobs:
             --github-output "$GITHUB_OUTPUT" \
             --reasoning-file "$RUNNER_TEMP/reasoning.md" \
             --blocker-file "$RUNNER_TEMP/blocker.md" \
-            --timeout 300
+            --timeout 1200
 
       - name: Enforce changed paths
         id: enforce
@@ -124,19 +122,19 @@ jobs:
 
       - name: Push branch and create PR
         id: publish
-        if: steps.agent.outputs.decision == 'IMPLEMENT'
+        if: steps.agent.outputs.decision == 'IMPLEMENT' && steps.enforce.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          branch="validate/issue-$ISSUE_NUMBER"
+          branch="probe/issue-$ISSUE_NUMBER"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${REPOSITORY}.git"
           git checkout -B "$branch"
           git add --all
-          git commit -m "Validate #$ISSUE_NUMBER"
+          git commit -m "Probe #$ISSUE_NUMBER"
           git push --set-upstream origin "$branch"
           # Derive a short title from the first line of the reasoning.
           first_line=$(head -1 "$RUNNER_TEMP/reasoning.md")
@@ -145,8 +143,11 @@ jobs:
             --repo "$REPOSITORY" \
             --head "$branch" \
             --title "$title" \
-            --body-file "$RUNNER_TEMP/reasoning.md")
+            --body-file "$RUNNER_TEMP/reasoning.md" \
+            --draft)
           echo "pr_url=$pr_url" >> "$GITHUB_OUTPUT"
+          # Comment on the PR telling the reviewer how to run CI.
+          gh pr comment "$pr_url" --body "This PR is a draft. Inspect the changes, then mark it ready for review to run CI."
 
       - name: Comment on issue
         if: always()
@@ -166,8 +167,8 @@ jobs:
 
           **Blocker:** $blocker"
           else
-            body="The doc-validation agent opened a PR: $PR_URL
+            body="The doc-validation agent opened a draft PR: $PR_URL
 
-          Review the PR and inspect the CI runs to determine whether the doc was validated or refuted."
+          Review the PR, then mark it ready for review to run CI. Inspect the CI runs to determine whether the doc was validated or refuted."
           fi
           gh issue comment "$ISSUE_NUMBER" --repo "$REPOSITORY" --body "$body"

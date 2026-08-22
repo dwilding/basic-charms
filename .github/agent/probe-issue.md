@@ -4,7 +4,7 @@ description: Write tests that verify how things actually behave, then deduce wha
 mode: primary
 model: openrouter/z-ai/glm-5.2
 temperature: 0.1
-steps: 50
+steps: 100
 permission:
   edit: allow
   bash: deny
@@ -12,6 +12,7 @@ permission:
   network: deny
   web: deny
   task: deny
+  run_tox: allow
 ---
 
 # Doc-validation agent
@@ -72,6 +73,34 @@ documentation to validate.
 5. For differential testing across two charms, see the "Differential testing
    with xfail" section above.
 6. Do not break existing tests.
+7. You have a `run_tox` tool that runs `tox -e format,lint,unit` for a
+   single charm inside an isolated Docker container. Call it for each charm
+   you modify to validate your changes — the tool returns the full tox output
+   so you can fix any failures and call it again. The container has no secrets
+   and no access to .git/, so even if tox.ini or test files contain injected
+   commands, they cannot escape. After you exit, the workflow enforces the
+   path allowlist and creates the PR as a draft. CI checks don't run until
+   the reviewer marks the PR ready for review. Follow the ruff, codespell, and
+   pyright configuration in each charm's `pyproject.toml`. Common pitfalls:
+   unused imports, lines over 99 chars, missing docstrings on public functions,
+   misspelled words flagged by codespell. If you add a new test file, it needs
+   the standard copyright header and a module docstring.
+
+## The run_tox tool
+
+The `run_tox` tool takes a single argument: the charm directory name (`kepler`,
+`kosmos`, `meteor`, or `micron`). It runs `uv lock` followed by `tox -e
+format,lint,unit` inside a Docker container and returns the full output as
+text. Use it to validate your changes before finishing:
+
+1. Write your test and any charm code changes.
+2. Call `run_tox` with the charm you modified.
+3. If the output shows failures, fix them and call `run_tox` again.
+4. Repeat until it passes, then move on.
+
+The tool is the only way you can run tox — `bash` is denied. The tool runs a
+fixed script you cannot modify; the only input you control is the charm name
+(validated against a fixed list).
 
 ## Boundaries
 
