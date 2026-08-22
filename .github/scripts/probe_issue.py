@@ -342,6 +342,7 @@ def run_opencode(
             str(repo_root),
             "--agent",
             agent_name,
+            "--auto",
             "--file",
             str(prompt_path),
             "--",
@@ -541,7 +542,9 @@ def _run_probe(args) -> int:
         result = parse_decision(stdout)
     except ValueError as error:
         print(f"::error::Decision parsing failed: {error}", file=sys.stderr)
-        print(f"OpenCode output:\n{stdout}", file=sys.stderr)
+        print(f"OpenCode stdout:\n{stdout}", file=sys.stderr)
+        if stderr:
+            print(f"OpenCode stderr:\n{stderr}", file=sys.stderr)
         return 1
 
     # 7. Write GitHub output.
