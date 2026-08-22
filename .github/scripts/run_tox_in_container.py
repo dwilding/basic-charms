@@ -284,40 +284,44 @@ def run_tox(
 
     Returns 0 if passed, 1 if failed.
     """
-    uv_binary = find_uv_binary()
-    py_dir = find_uv_python("3.10")
-    py_name = python_bin_name(py_dir)
+    try:
+        uv_binary = find_uv_binary()
+        py_dir = find_uv_python("3.10")
+        py_name = python_bin_name(py_dir)
 
-    with tempfile.TemporaryDirectory(prefix="tox-venv-") as venv_tmpdir:
-        venv_path = Path(venv_tmpdir) / "venv"
-        site_packages = create_tox_venv(
-            uv_binary=uv_binary, python_version="3.10", venv_path=venv_path
-        )
-
-        libs_exists = (repo_root / LIBS_DIR).is_dir()
-        container_name = f"probe-tox-{container_suffix}"
-
-        try:
-            start_container(
-                container_name=container_name,
-                python_dir=py_dir,
-                py_bin_name=py_name,
-                site_packages_dir=site_packages,
-                uv_binary=uv_binary,
-                repo_root=repo_root,
-                libs_exists=libs_exists,
+        with tempfile.TemporaryDirectory(prefix="tox-venv-") as venv_tmpdir:
+            venv_path = Path(venv_tmpdir) / "venv"
+            site_packages = create_tox_venv(
+                uv_binary=uv_binary, python_version="3.10", venv_path=venv_path
             )
-            failed, output = run_tox_in_charm(
-                container_name=container_name,
-                charm_dir=charm_dir,
-                tox_env=tox_env,
-                py_bin=f"/python/bin/{py_name}",
-            )
-        finally:
-            stop_container(container_name)
 
-    print(output)
-    return failed
+            libs_exists = (repo_root / LIBS_DIR).is_dir()
+            container_name = f"probe-tox-{container_suffix}"
+
+            try:
+                start_container(
+                    container_name=container_name,
+                    python_dir=py_dir,
+                    py_bin_name=py_name,
+                    site_packages_dir=site_packages,
+                    uv_binary=uv_binary,
+                    repo_root=repo_root,
+                    libs_exists=libs_exists,
+                )
+                failed, output = run_tox_in_charm(
+                    container_name=container_name,
+                    charm_dir=charm_dir,
+                    tox_env=tox_env,
+                    py_bin=f"/python/bin/{py_name}",
+                )
+            finally:
+                stop_container(container_name)
+
+        print(output)
+        return failed
+    except Exception as e:  # noqa: BLE001
+        print(f"run_tox failed: {e}", file=sys.stderr)
+        return 1
 
 
 # ---------------------------------------------------------------------------

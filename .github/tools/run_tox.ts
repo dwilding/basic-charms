@@ -24,9 +24,11 @@ export default tool({
       "run_tox_in_container.py",
     );
     try {
-      const result =
-        await Bun.$`uv run --script ${script} --repo-root ${context.worktree} --charm-dir ${args.charm} --tox-env format,lint,unit`.text();
-      return result.trim();
+      // Redirect stderr to stdout so the agent sees error messages too.
+      const proc =
+        Bun.$`uv run --script ${script} --repo-root ${context.worktree} --charm-dir ${args.charm} --tox-env format,lint,unit 2>&1`.nothrow();
+      const output = await proc.text();
+      return output.trim();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       return `run_tox failed with an error. This may be a Docker or environment issue. Error: ${msg}`;
