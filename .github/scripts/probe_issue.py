@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Compose the doc-validation prompt, run OpenCode, and parse the decision.
 
 This script is dependency-free so it can run on a GitHub Actions runner. It:
@@ -39,8 +38,6 @@ ALLOWED_DOMAINS = frozenset(
 )
 MAX_URLS = 5
 MAX_DOC_BYTES = 64 * 1024
-
-ALLOWED_DIRS = ("kepler/", "kosmos/", "meteor/", "micron/", "libs/")
 
 OPENCODE_PROMPT_MESSAGE = (
     "Use the attached workflow-prompt.md file as the complete prompt for this "

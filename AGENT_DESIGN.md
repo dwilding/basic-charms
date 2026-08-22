@@ -16,7 +16,7 @@ Everything the agent needs to run lives under `.github/`, which is hard-denied. 
 
 ## Trust boundaries
 
-Trusted (agent cannot modify): the workflow YAML, the agent definition, the Python script, the composed prompt's system constraints and output contract, the allowlist enforcement.
+Trusted (agent cannot modify): the workflow YAML, the agent definition, the TypeScript tool, the Python scripts, the composed prompt's system constraints and output contract, the allowlist enforcement.
 
 Untrusted (treated as data, delimited in the prompt): issue title, body, comments, fetched documentation.
 
@@ -44,7 +44,7 @@ The `run_tox` tool is the exception: it lets the agent trigger tox inside an iso
 1. `workflow_dispatch` with `issue_number` (required).
 2. Checkout with `persist-credentials: false`, `fetch-depth: 0`. No git credentials in `.git/config` during the agent run.
 3. `git config core.hooksPath /dev/null` — defense in depth, inert hooks.
-4. Setup Python 3.12, Node 24, install `opencode-ai@1.18.16`.
+4. Setup Node 24, install `opencode-ai@1.18.16`, set up uv.
 5. Prepare issue context: fetch the issue via `gh issue view` (title, body, comments) and write it to a markdown file.
 6. Run `probe_issue.py`:
    - Read the issue context file.

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Run tox inside a Docker container for security isolation.
 
 The agent can modify tox.ini, pyproject.toml, uv.lock, and test files.
@@ -20,7 +19,7 @@ Even if the agent injected malicious commands into tox.ini, those commands run
 inside the container without secrets and without access to the host filesystem.
 
 Usage:
-    python3 run_tox_in_container.py \
+    uv run --script run_tox_in_container.py \
         --repo-root /path/to/repo \
         --charm-dir kepler \
         --tox-env format,lint,unit

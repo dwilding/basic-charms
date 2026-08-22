@@ -24,7 +24,7 @@ export default tool({
       "run_tox_in_container.py",
     );
     const result =
-      await Bun.$`python3 ${script} --repo-root ${context.worktree} --charm-dir ${args.charm} --tox-env format,lint,unit`.text();
+      await Bun.$`uv run --script ${script} --repo-root ${context.worktree} --charm-dir ${args.charm} --tox-env format,lint,unit`.text();
     return result.trim();
   },
 });
