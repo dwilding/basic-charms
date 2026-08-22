@@ -3,12 +3,14 @@
 The agent can modify tox.ini, pyproject.toml, uv.lock, and test files.
 Running tox directly on the runner would let injected commands execute with
 GITHUB_TOKEN in the environment. This script runs tox inside a Docker container
-based on the ubuntu/node image, which includes Node.js (needed by pyright)
-and CA certificates (needed for package downloads).
+based on a chiseled Ubuntu image (dotnet-deps) that has no shell, no Python,
+and no coreutils — only the runtime libraries needed to run Python.
 
 Python is bind-mounted from the host's uv-managed Python. A venv with tox and
 tox-uv installed is bind-mounted as site-packages. The uv binary is bind-mounted
 so tox-uv's runner can create venvs and install dependencies inside the container.
+Node.js is bind-mounted from the host so pyright's nodeenv finds it and skips
+downloading (the chiseled image has no CA certificates for SSL).
 
 The charm directories are bind-mounted read-write so that ruff format changes
 propagate back to the host automatically. libs/ is mounted read-only.
@@ -41,9 +43,10 @@ from pathlib import Path
 # Constants
 # ---------------------------------------------------------------------------
 
-# Ubuntu image with Node.js and CA certificates pre-installed.
-# Node.js is needed by pyright; CA certificates are needed for package downloads.
-CONTAINER_IMAGE = "docker.io/ubuntu/node:24.04"
+# Chiseled Ubuntu image with only runtime libraries (glibc, libssl, libz,
+# ca-certs). No shell, no coreutils, no Python — everything is bind-mounted.
+# Borrowed from jjx (https://github.com/dwilding/jjx).
+CONTAINER_IMAGE = "docker.io/ubuntu/dotnet-deps:8.0-24.04_stable"
 
 CHARM_DIRS = ("kepler", "kosmos", "meteor", "micron")
 LIBS_DIR = "libs"
@@ -64,6 +67,18 @@ def find_uv_binary() -> str:
         raise RuntimeError("uv not found on PATH. Install uv first (setup-uv action).")
     return uv
 
+def find_node_dir() -> Path | None:
+    """Find the Node.js installation directory on the host.
+
+    setup-node installs to /opt/hostedtoolcache/node/<version>/x64.
+    Returns None if not found — pyright will then try to download Node.js
+    via nodeenv, which may fail in the container.
+    """
+    node = shutil.which("node")
+    if node is None:
+        return None
+    # node is at <dir>/bin/node — return the parent of bin/.
+    return Path(node).parent.parent
 
 def find_uv_python(version: str) -> Path:
     """Find the uv-managed Python directory for the given version.
@@ -141,6 +156,7 @@ def start_container(
     uv_binary: str,
     repo_root: Path,
     libs_exists: bool,
+    node_dir: Path | None = None,
 ) -> str:
     """Start the Docker container with bind mounts. Returns the container name."""
     # Check Docker is available before trying to use it.
@@ -163,6 +179,9 @@ def start_container(
         f"{site_packages_dir}:/venv:ro",
         f"{uv_binary}:/usr/local/bin/uv:ro",
     ]
+    # Bind-mount Node.js so pyright's nodeenv finds it and skips downloading.
+    if node_dir is not None:
+        mounts.append(f"{node_dir}:/node:ro")
     for charm_dir in CHARM_DIRS:
         host_path = repo_root / charm_dir
         if host_path.is_dir():
@@ -179,12 +198,14 @@ def start_container(
         "-d",
         "--network",
         "bridge",
+        "--user",
+        "0:0",
         "--tmpfs",
         "/tmp:mode=1777,exec",
         "-e",
         "PYTHONPATH=/venv:/charm",
         "-e",
-        "PATH=/usr/local/bin:/usr/bin:/bin",
+        "PATH=/usr/local/bin:/usr/bin:/bin:/node/bin",
         "-e",
         "UV_CACHE_DIR=/tmp/uv-cache",
         "-e",
@@ -299,6 +320,7 @@ def run_tox(
         uv_binary = find_uv_binary()
         py_dir = find_uv_python("3.10")
         py_name = python_bin_name(py_dir)
+        node_dir = find_node_dir()
 
         with tempfile.TemporaryDirectory(prefix="tox-venv-") as venv_tmpdir:
             venv_path = Path(venv_tmpdir) / "venv"
@@ -318,6 +340,7 @@ def run_tox(
                     uv_binary=uv_binary,
                     repo_root=repo_root,
                     libs_exists=libs_exists,
+                    node_dir=node_dir,
                 )
                 failed, output = run_tox_in_charm(
                     container_name=container_name,
