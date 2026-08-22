@@ -45,6 +45,9 @@ jobs:
       - name: Install OpenCode
         run: npm install -g opencode-ai@1.18.16  # zizmor: ignore[adhoc-packages] pinned version, no lockfile available for global npm installs
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+
       - name: Prepare issue context
         env:
           GH_TOKEN: ${{ github.token }}
@@ -124,7 +127,7 @@ jobs:
 
       - name: Push branch and create PR
         id: publish
-        if: steps.agent.outputs.decision == 'IMPLEMENT'
+        if: steps.agent.outputs.decision == 'IMPLEMENT' && steps.enforce.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -147,6 +150,8 @@ jobs:
             --title "$title" \
             --body-file "$RUNNER_TEMP/reasoning.md")
           echo "pr_url=$pr_url" >> "$GITHUB_OUTPUT"
+          # Comment on the PR telling the reviewer how to approve CI.
+          gh pr comment "$pr_url" --body "CI checks on this PR require reviewer approval. Inspect the changes, then approve the pending deployment in the Actions tab to run them."
 
       - name: Comment on issue
         if: always()
@@ -168,6 +173,8 @@ jobs:
           else
             body="The doc-validation agent opened a PR: $PR_URL
 
-          Review the PR and inspect the CI runs to determine whether the doc was validated or refuted."
+          Review the PR and inspect the CI runs to determine whether the doc was validated or refuted.
+
+          **Note:** CI checks on the PR require reviewer approval. Inspect the changes, then approve the pending deployment in the Actions tab to run them."
           fi
           gh issue comment "$ISSUE_NUMBER" --repo "$REPOSITORY" --body "$body"

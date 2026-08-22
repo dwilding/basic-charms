@@ -14,17 +14,19 @@ To perform an adversarial test:
 
     The basic charms are a known-good starting point, whose tests pass by default. The PR applies changes on top of this starting point, which minimizes your review burden.
 
-    The agent doesn't trust the doc. It forms its own understanding of how the code behaves, then creates a PR as an attempt to prove its understanding — aiming for passing CI. The PR description explains what the result means for the doc. For example:
+    The agent doesn't trust the documentation. It forms its own understanding of how the code behaves, then creates a PR as an attempt to prove its understanding — aiming for passing CI. The PR description explains what the result means for the documentation. For example:
 
     > I believe the doc is wrong about `<claim>`. I added a test asserting `<what I believe is true>`, which is expected to pass. If CI passes, the doc is incorrect.
 
-    Or, if the agent's understanding happens to match the doc:
+    Or, if the agent's understanding happens to match the documentation:
 
     > I believe `<claim>` is true. I added a test asserting it, which is expected to pass. If CI passes, the doc is correct.
 
-5. Review the PR to make sure the test is meaningful and the conclusion is valid.
+5. Review the PR to make sure the agent's changes are meaningful and trustworthy. Then approve the CI checks.
 
-6. Decide how to fix the documentation — if needed.
+6. After the CI checks have completed, use the PR description to draw a conclusion about the documentation.
+
+7. Decide how to fix the documentation — if needed.
 
 The agentic workflow that creates the PR is explained in [AGENT_DESIGN.md](AGENT_DESIGN.md). It's a **highly experimental** workflow based on ideas explored in [SecondSkoll/generic-agentic-workflows](https://github.com/SecondSkoll/generic-agentic-workflows). It uses OpenCode, OpenRouter, and GLM-5.2.
 

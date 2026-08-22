@@ -8,7 +8,9 @@ A manually dispatched GitHub Action in `basic-charms` that reads an issue descri
 
 - `.github/workflows/probe-issue.yaml` — the workflow.
 - `.github/agent/probe-issue.md` — OpenCode agent definition.
+- `.github/tools/run_tox.ts` — OpenCode custom tool that runs tox inside a Docker container.
 - `.github/scripts/probe_issue.py` — compose prompt, run OpenCode, parse decision.
+- `.github/scripts/run_tox_in_container.py` — run tox inside a Docker container for security isolation.
 
 Everything the agent needs to run lives under `.github/`, which is hard-denied. The agent cannot modify its own guardrails, prompt, or enforcement code.
 
@@ -30,11 +32,12 @@ permission:
   network: deny
   web: deny
   task: deny
+  run_tox: allow
 ```
 
-The agent can read and edit files. Nothing else. It cannot run commands, reach the network, or delegate. This is the single most important control: every critical escape vector (direct push, git hooks, `/proc` env access, network exfiltration, background processes, git config manipulation, package installation, git filter injection) requires command execution. With `bash: deny` the agent's only output is file changes in the working tree, which are fully visible to enforcement and human review.
+The agent can read and edit files, and call the `run_tox` custom tool. Nothing else. It cannot run shell commands, reach the network, or delegate. `bash: deny` is the single most important control: every critical escape vector (direct push, git hooks, `/proc` env access, network exfiltration, background processes, git config manipulation, package installation, git filter injection) requires command execution. With `bash: deny` the agent's only output is file changes in the working tree, which are fully visible to enforcement and human review.
 
-The agent does not need bash. Its job is to write tests and charm changes. Validation happens via CI runs on the PR, which the user inspects.
+The `run_tox` tool is the exception: it lets the agent trigger tox inside an isolated Docker container. The tool runs a fixed script (`run_tox_in_container.py`) that the agent cannot modify; the only input the agent controls is the charm name (validated against a fixed list). The container has no secrets and no `.git/` access, so even if the agent injected malicious commands into `tox.ini` or test files, they cannot escape. See "The run_tox tool" below.
 
 ## Workflow flow
 
@@ -47,10 +50,10 @@ The agent does not need bash. Its job is to write tests and charm changes. Valid
    - Read the issue context file.
    - Extract URLs from the issue and fetch linked documentation. Domain-allowlisted: `documentation.ubuntu.com`, `discourse.ubuntu.com`, `raw.githubusercontent.com`, `github.com`. Max 5 URLs, 64KB each.
    - Compose the prompt: system constraints, runtime context, task instructions, untrusted content (delimited), output contract.
-   - Stage the agent: copy `.github/agent/probe-issue.md` to `.opencode/agents/`.
+   - Stage the agent and tool: copy `.github/agent/probe-issue.md` to `.opencode/agents/` and `.github/tools/run_tox.ts` to `.opencode/tools/`.
    - Run OpenCode with a scrubbed environment: `PATH`, `HOME`, `USER`, `SHELL`, `LANG`, `OPENROUTER_API_KEY` only. No `GITHUB_TOKEN`, no `ACTIONS_ID_TOKEN_*`. The run is bounded by a 20-minute wall-clock timeout (1200s). If OpenCode exceeds it, the script converts the timeout into a `BLOCKED` decision with a clear "timed out" message rather than crashing — so the issue gets a useful comment instead of a bare workflow failure. The agent's step limit (`steps: 50`) is the other bound; in practice the wall-clock timeout is the binding constraint.
    - Parse the decision: the happy path is the default. If an `IMPLEMENTATION_BLOCKER:` line is present, the decision is `BLOCKED` and the blocker text is written to a file. Otherwise the decision is `IMPLEMENT`; the `IMPLEMENTATION_REASONING:` text is required and written to a file — the reasoning is a core part of the adversarial approach, so its absence is a genuine failure, not something to paper over.
-7. Cleanup: remove `.opencode/agents/probe-issue.md` so it does not appear as a changed path.
+7. Cleanup: remove `.opencode/agents/probe-issue.md` and `.opencode/tools/run_tox.ts` so they do not appear as changed paths.
 8. If `BLOCKED`: comment on the issue with the blocker reason. Done.
 9. If `IMPLEMENT`: enforce changed paths (inline bash in the YAML, not a Python file the agent could tamper with).
    - Collect: `git diff --name-only` against the default branch, plus `git ls-files --others --exclude-standard` for untracked files.
@@ -58,7 +61,7 @@ The agent does not need bash. Its job is to write tests and charm changes. Valid
    - Reject if any path is outside those five directories. Reject if no changes.
 10. Configure git credentials using `GITHUB_TOKEN` — only now, after enforcement passes and the agent has exited.
 11. `git add --all`, commit, push branch `validate/issue-<n>`.
-12. `gh pr create` with title `verify: <first line of reasoning>`, the agent's reasoning file as the PR body. The body does not include `Closes #<n>`.
+12. `gh pr create` with title `verify: <first line of reasoning>`, the agent's reasoning file as the PR body. The body does not include `Closes #<n>`. Comment on the PR telling the reviewer to approve the pending deployment in the Actions tab to run CI.
 13. Comment on the issue with the result (PR link, blocker, or failure message). This step always runs.
 
 ## Prompt composition
@@ -136,7 +139,7 @@ Untrusted content as data: issue body, comments, and fetched docs wrapped in `<u
 
 Doc-fetch allowlist: only `documentation.ubuntu.com`, `discourse.ubuntu.com`, `raw.githubusercontent.com`, `github.com`. Max 5 URLs, 64KB each. Prevents SSRF from untrusted issue content.
 
-Agent staging and cleanup: agent file copied to `.opencode/agents/` before the run, removed before diff collection.
+Agent staging and cleanup: agent definition and tool file copied to `.opencode/` before the run, removed before diff collection.
 
 Manual dispatch only: no automatic triggers. The user explicitly chooses to run this.
 
@@ -157,13 +160,47 @@ Every critical escape vector requires command execution. With `bash: allow`, an 
 
 With `bash: deny`, none of these are possible. The agent can only read and edit files. Its only output is file changes in the working tree.
 
+## The run_tox tool
+
+The agent has a `run_tox` custom tool (defined in `.github/tools/run_tox.ts`) that runs `tox -e format,lint,unit` for a single charm inside an isolated Docker container. The tool is staged into `.opencode/tools/` before the agent runs and removed after, so it does not appear as a changed path.
+
+The tool takes a single argument: the charm directory name (`kepler`, `kosmos`, `meteor`, or `micron`). It validates the name against a fixed list, then invokes `run_tox_in_container.py` with that charm. The agent cannot pass arbitrary arguments to the script — only the charm name.
+
+The container is based on `docker.io/ubuntu/dotnet-deps:8.0-24.04_stable` — a chiseled Ubuntu image with only runtime libraries (glibc, libssl, libz, ca-certs), no shell, no Python, no coreutils. Python is bind-mounted from the host's uv-managed Python 3.10. A venv with tox and tox-uv is bind-mounted as site-packages. The `uv` binary is bind-mounted so tox-uv's runner can create venvs and install dependencies. The charm directories are bind-mounted read-write (so `ruff format` changes propagate back). `libs/` is mounted read-only. This approach is borrowed from [jjx](https://github.com/dwilding/jjx), which uses the same image and bind-mount strategy for charm runner containers.
+
+The container provides three layers of isolation:
+
+1. **No secrets.** No `GITHUB_TOKEN` or `OPENROUTER_API_KEY` is passed into the container. Even if malicious code runs, it has nothing to steal.
+2. **No `.git/` access.** Only the charm directories and `libs/` are mounted. The container cannot write `.git/hooks/`, modify `.git/config`, or access the repository's git state.
+3. **No host filesystem access.** Docker's filesystem isolation means the container can't reach the runner's working tree, `/proc/<pid>/environ`, or anything else on the host.
+
+Even if the agent injected malicious commands into `tox.ini`, `pyproject.toml`, or test files, those commands run inside the container without secrets and without access to the host. The `uv lock` step (run before tox) regenerates the lockfile from `pyproject.toml`, overwriting any tampering the agent may have done to `uv.lock` — though a malicious package added to `pyproject.toml` would still be installed, it would execute inside the container without secrets.
+
+The agent calls the tool on demand to validate its work: write code, call `run_tox`, see the output, fix issues, call again. This happens within the single agent session — no separate fix sessions are needed. After the agent exits, the workflow enforces the path allowlist and creates the PR.
+
+`tox -e integration` is never run by this workflow. Integration tests require a Juju controller and are slow; they run in the per-charm CI workflows (`kepler.yaml`, etc.) after the PR is created and after the reviewer approves CI.
+
+## CI gating on the PR
+
+The per-charm CI workflows (`kepler.yaml`, `kosmos.yaml`, `meteor.yaml`, `micron.yaml`) use a GitHub Environment called `untrusted-ci` with required reviewers. When a PR is created, the CI jobs show as "Waiting for review" with an Approve button in the Actions UI. A reviewer must inspect the changes and click Approve before the jobs run.
+
+This is necessary because the per-charm CI runs `tox -e unit` (which executes the agent's test code) and `tox -e integration` (which deploys the charm). The `run_tox` tool runs inside a container, but the per-charm CI runs on the runner directly. The environment gate ensures a human reviews the code before it executes outside the container.
+
+The `untrusted-ci` environment must be configured in the repo settings (Settings → Environments → `untrusted-ci`) with required reviewers set to the repository maintainers. This is a repo-level setting, not a workflow-level setting — it must be documented and verified by anyone auditing the setup.
+
 ## Remaining risks
 
 Agent reads committed secrets (e.g., a `.env` file in the repo): low. Cannot exfiltrate without bash or network. Don't commit secrets.
 
-Agent makes subtle malicious changes (e.g., typosquat a dependency in `pyproject.toml`): medium. Mitigated by human PR review and dependency scanning.
+Agent makes subtle malicious changes (e.g., typosquat a dependency in `pyproject.toml`): medium. Mitigated by human PR review and dependency scanning. The `uv lock` step in the container regenerates the lockfile, but a malicious package in `pyproject.toml` would still be installed inside the container (without secrets). On the runner (after CI approval), the malicious package would execute with the runner's environment — but the reviewer inspects the PR before approving CI.
 
 Prompt injection from issue or docs content: low-medium. Mitigated by `<untrusted-content>` delimiters and system constraints. The agent can only edit files, which are reviewed.
+
+Agent modifies `.git/config` or `.git/hooks/` via `edit: allow`: low-medium. Enforcement checks `git diff --name-only` and `git ls-files --others --exclude-standard`, which do not list files under `.git/`. If OpenCode's `edit: allow` permits editing `.git/`, the agent could override `core.hooksPath /dev/null` and plant hooks. Mitigated by the push step running after enforcement and the agent has exited — but a planted hook in `.git/hooks/` would fire during `git add` or `git push`. This risk should be verified: check whether OpenCode's `edit: allow` covers `.git/`.
+
+Agent deletes critical files: low. Mitigated by human PR review.
+
+OpenCode vulnerability allowing code execution despite `bash: deny`: low, outside the threat model. Assume OpenCode enforces permissions correctly.
 
 ## Dry-run mode (not implemented)
 
@@ -178,7 +215,3 @@ If dry-run is wanted later, implement it as follows:
 5. In the "Comment on issue" step, add a branch for the dry-run case that tells the user to re-run with `dry_run=false` to create a PR.
 
 The Python script needs no changes — it only composes the prompt and parses the decision; dry-run is purely a workflow-level concern about whether to publish the agent's changes.
-
-Agent deletes critical files: low. Mitigated by human PR review.
-
-OpenCode vulnerability allowing code execution despite `bash: deny`: low, outside the threat model. Assume OpenCode enforces permissions correctly.
