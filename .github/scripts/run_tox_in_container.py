@@ -30,6 +30,7 @@ Exit code is 0 if tox passed, 1 if it failed.
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -58,6 +59,9 @@ def find_uv_binary() -> str:
     """Find the uv binary on the host."""
     uv = shutil.which("uv")
     if uv is None:
+        # Print PATH for debugging when uv isn't found.
+        print(f"PATH={os.environ.get('PATH', '<not set>')}", file=sys.stderr)
+        print(f"which docker: {shutil.which('docker')}", file=sys.stderr)
         raise RuntimeError("uv not found on PATH. Install uv first (setup-uv action).")
     return uv
 
@@ -140,6 +144,17 @@ def start_container(
     libs_exists: bool,
 ) -> str:
     """Start the Docker container with bind mounts. Returns the container name."""
+    # Check Docker is available before trying to use it.
+    docker_check = subprocess.run(
+        ["docker", "info"], capture_output=True, text=True, check=False
+    )
+    if docker_check.returncode != 0:
+        docker_path = shutil.which("docker") or "<not found>"
+        raise RuntimeError(
+            f"Docker is not available (docker at {docker_path}, exit {docker_check.returncode}). "
+            f"stderr: {docker_check.stderr.strip()}"
+        )
+
     subprocess.run(
         ["docker", "rm", "-f", container_name], capture_output=True, check=False
     )
@@ -319,6 +334,10 @@ def run_tox(
 
         print(output)
         return failed
+    except subprocess.CalledProcessError as e:
+        detail = e.stderr or e.stdout or str(e)
+        print(f"run_tox failed (exit {e.returncode}): {detail}", file=sys.stderr)
+        return 1
     except Exception as e:  # noqa: BLE001
         print(f"run_tox failed: {e}", file=sys.stderr)
         return 1
