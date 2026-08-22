@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  validate:
+  probe:
     runs-on: ubuntu-latest
     env:
       ISSUE_NUMBER: ${{ github.event.inputs.issue_number }}
@@ -76,7 +76,7 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
           set -euo pipefail
-          branch="validate/issue-$ISSUE_NUMBER"
+          branch="probe/issue-$ISSUE_NUMBER"
           uv run --script .github/scripts/probe_issue.py \
             --issue-context "$RUNNER_TEMP/issue-context.md" \
             --issue-number "$ISSUE_NUMBER" \
@@ -128,13 +128,13 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          branch="validate/issue-$ISSUE_NUMBER"
+          branch="probe/issue-$ISSUE_NUMBER"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${REPOSITORY}.git"
           git checkout -B "$branch"
           git add --all
-          git commit -m "Validate #$ISSUE_NUMBER"
+          git commit -m "Probe #$ISSUE_NUMBER"
           git push --set-upstream origin "$branch"
           # Derive a short title from the first line of the reasoning.
           first_line=$(head -1 "$RUNNER_TEMP/reasoning.md")

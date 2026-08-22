@@ -60,7 +60,7 @@ The `run_tox` tool is the exception: it lets the agent trigger tox inside an iso
    - Allow only paths starting with `kepler/`, `kosmos/`, `meteor/`, `micron/`, or `libs/`.
    - Reject if any path is outside those five directories. Reject if no changes.
 10. Configure git credentials using `GITHUB_TOKEN` — only now, after enforcement passes and the agent has exited.
-11. `git add --all`, commit, push branch `validate/issue-<n>`.
+11. `git add --all`, commit, push branch `probe/issue-<n>`.
 12. `gh pr create` with title `verify: <first line of reasoning>`, the agent's reasoning file as the PR body. The body does not include `Closes #<n>`. Comment on the PR telling the reviewer to approve the pending deployment in the Actions tab to run CI.
 13. Comment on the issue with the result (PR link, blocker, or failure message). This step always runs.
 
