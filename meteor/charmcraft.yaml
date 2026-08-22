@@ -47,3 +47,16 @@ config:
         Acceptable values are: "info", "debug", "warning", "error" and "critical"
       default: "info"
       type: string
+
+# Actions exposed by the charm, mirroring the ops 'manage actions' howto:
+# https://canonical.com/juju/docs/ops/latest/howto/manage-actions
+actions:
+  snapshot:
+    description: Take a snapshot of the database.
+    params:
+      filename:
+        type: string
+        description: The name of the snapshot file.
+    required:
+      - filename
+    additionalProperties: false
