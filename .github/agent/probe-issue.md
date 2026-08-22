@@ -4,7 +4,7 @@ description: Write tests that verify how things actually behave, then deduce wha
 mode: primary
 model: openrouter/z-ai/glm-5.2
 temperature: 0.1
-steps: 50
+steps: 100
 permission:
   edit: allow
   bash: deny

@@ -23,8 +23,13 @@ export default tool({
       "scripts",
       "run_tox_in_container.py",
     );
-    const result =
-      await Bun.$`uv run --script ${script} --repo-root ${context.worktree} --charm-dir ${args.charm} --tox-env format,lint,unit`.text();
-    return result.trim();
+    try {
+      const result =
+        await Bun.$`uv run --script ${script} --repo-root ${context.worktree} --charm-dir ${args.charm} --tox-env format,lint,unit`.text();
+      return result.trim();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return `run_tox failed with an error. This may be a Docker or environment issue. Error: ${msg}`;
+    }
   },
 });
