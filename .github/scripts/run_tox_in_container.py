@@ -118,7 +118,7 @@ def create_tox_venv(*, uv_binary: str, python_version: str, venv_path: Path) -> 
         check=True,
         capture_output=True,
     )
-    site_packages = venv_path / "lib" / python_version / "site-packages"
+    site_packages = venv_path / "lib" / f"python{python_version}" / "site-packages"
     if not site_packages.is_dir():
         raise RuntimeError(f"site-packages not found at {site_packages}")
     return site_packages
