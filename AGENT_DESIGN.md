@@ -166,7 +166,7 @@ The agent has a `run_tox` custom tool (defined in `.github/tools/run_tox.ts`) th
 
 The tool takes a single argument: the charm directory name (`kepler`, `kosmos`, `meteor`, or `micron`). It validates the name against a fixed list, then invokes `run_tox_in_container.py` with that charm. The agent cannot pass arbitrary arguments to the script — only the charm name.
 
-The container is based on `docker.io/ubuntu/dotnet-deps:8.0-24.04_stable` — a chiseled Ubuntu image with only runtime libraries (glibc, libssl, libz, ca-certs), no shell, no Python, no coreutils. Python is bind-mounted from the host's uv-managed Python 3.10. A venv with tox and tox-uv is bind-mounted as site-packages. The `uv` binary is bind-mounted so tox-uv's runner can create venvs and install dependencies. The charm directories are bind-mounted read-write (so `ruff format` changes propagate back). `libs/` is mounted read-only. This approach is borrowed from [jjx](https://github.com/dwilding/jjx), which uses the same image and bind-mount strategy for charm runner containers.
+The container is based on `docker.io/ubuntu/node:24.04` — an Ubuntu image with Node.js and CA certificates pre-installed. Node.js is needed by pyright; CA certificates are needed for package downloads. Python is bind-mounted from the host's uv-managed Python 3.10. A venv with tox and tox-uv is bind-mounted as site-packages. The `uv` binary is bind-mounted so tox-uv's runner can create venvs and install dependencies. The charm directories are bind-mounted read-write (so `ruff format` changes propagate back). `libs/` is mounted read-only.
 
 The container provides three layers of isolation:
 
