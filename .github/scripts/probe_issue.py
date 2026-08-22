@@ -525,11 +525,7 @@ def _run_probe(args) -> int:
                 )
             if args.github_output:
                 write_github_output(
-                    args.github_output,
-                    {
-                        "decision": "BLOCKED",
-                        "blocker": f"OpenCode timed out after {args.timeout} seconds.",
-                    },
+                    args.github_output, {"decision": "BLOCKED"}
                 )
             return 0
         print(f"::error::OpenCode exited with status {rc}.", file=sys.stderr)
@@ -547,9 +543,11 @@ def _run_probe(args) -> int:
             print(f"OpenCode stderr:\n{stderr}", file=sys.stderr)
         return 1
 
-    # 7. Write GitHub output.
+    # 7. Write decision to $GITHUB_OUTPUT. Only the decision goes here —
+    #    reasoning/blocker text can contain newlines, which break the
+    #    key=value format. Those are written to files in step 8.
     if args.github_output:
-        write_github_output(args.github_output, result)
+        write_github_output(args.github_output, {"decision": result["decision"]})
 
     # 8. Write reasoning/blocker to files for the workflow to read safely.
     if result["decision"] == "IMPLEMENT" and args.reasoning_file:

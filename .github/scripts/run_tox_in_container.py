@@ -63,7 +63,16 @@ def find_uv_binary() -> str:
 
 
 def find_uv_python(version: str) -> Path:
-    """Find the uv-managed Python directory for the given version."""
+    """Find the uv-managed Python directory for the given version.
+
+    Installs the Python version first if it's not already available.
+    """
+    subprocess.run(
+        ["uv", "python", "install", version],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
     result = subprocess.run(
         ["uv", "python", "find", version],
         capture_output=True,
@@ -161,7 +170,11 @@ def start_container(
         "-e",
         "PYTHONPATH=/venv:/charm",
         "-e",
+        "PATH=/usr/local/bin:/usr/bin:/bin",
+        "-e",
         "UV_CACHE_DIR=/tmp/uv-cache",
+        "-e",
+        "UV_PYTHON_INSTALL_DIR=/tmp/uv-python",
         "-e",
         "TOX_WORK_DIR=/tmp/tox",
         "-e",
