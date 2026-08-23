@@ -67,6 +67,7 @@ def find_uv_binary() -> str:
         raise RuntimeError("uv not found on PATH. Install uv first (setup-uv action).")
     return uv
 
+
 def find_node_dir() -> Path | None:
     """Find the Node.js installation directory on the host.
 
@@ -79,6 +80,7 @@ def find_node_dir() -> Path | None:
         return None
     # node is at <dir>/bin/node — return the parent of bin/.
     return Path(node).parent.parent
+
 
 def find_uv_python(version: str) -> Path:
     """Find the uv-managed Python directory for the given version.
