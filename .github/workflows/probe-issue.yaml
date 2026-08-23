@@ -114,6 +114,14 @@ jobs:
             echo "Allowed: kepler/, kosmos/, meteor/, micron/, libs/" >&2
             exit 1
           fi
+          # Verify .git/ was not tampered with. The agent has edit: allow,
+          # which may cover .git/. A planted hook would fire during git add
+          # or git push with credentials available.
+          if [ -n "$(git diff --name-only -- .git/ 2>/dev/null)" ] || \
+             [ -n "$(git ls-files --others --exclude-standard -- .git/ 2>/dev/null)" ]; then
+            echo "::error::Agent modified files under .git/" >&2
+            exit 1
+          fi
           {
             echo "changed_files<<EOF"
             echo "$changed"

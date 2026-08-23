@@ -59,6 +59,7 @@ The `run_tox` tool is the exception: it lets the agent trigger tox inside an iso
    - Collect: `git diff --name-only` against the default branch, plus `git ls-files --others --exclude-standard` for untracked files.
    - Allow only paths starting with `kepler/`, `kosmos/`, `meteor/`, `micron/`, or `libs/`.
    - Reject if any path is outside those five directories. Reject if no changes.
+   - Verify `.git/` was not modified (checks `git diff` and `git ls-files` for `.git/` paths). Reject if any `.git/` files were changed — this prevents the agent from planting hooks that would fire during `git add` or `git push`.
 10. Configure git credentials using `GITHUB_TOKEN` — only now, after enforcement passes and the agent has exited.
 11. `git add --all`, commit, push branch `probe/issue-<n>`.
 12. `gh pr create --draft` with title `verify: <first line of reasoning>`, the agent's reasoning file as the PR body. The body does not include `Closes #<n>`. The PR is created as a draft so CI doesn't run automatically. Comment on the PR telling the reviewer to mark it ready for review to run CI.
@@ -194,7 +195,7 @@ Agent makes subtle malicious changes (e.g., typosquat a dependency in `pyproject
 
 Prompt injection from issue or docs content: low-medium. Mitigated by `<untrusted-content>` delimiters and system constraints. The agent can only edit files, which are reviewed.
 
-Agent modifies `.git/config` or `.git/hooks/` via `edit: allow`: low-medium. Enforcement checks `git diff --name-only` and `git ls-files --others --exclude-standard`, which do not list files under `.git/`. If OpenCode's `edit: allow` permits editing `.git/`, the agent could override `core.hooksPath /dev/null` and plant hooks. Mitigated by the push step running after enforcement and the agent has exited — but a planted hook in `.git/hooks/` would fire during `git add` or `git push`. This risk should be verified: check whether OpenCode's `edit: allow` covers `.git/`.
+Agent modifies `.git/config` or `.git/hooks/` via `edit: allow`: low. Enforcement includes a `.git/` integrity check that rejects the run if any files under `.git/` were modified. Combined with `core.hooksPath /dev/null` (set before the agent runs) and credentials being configured only after enforcement passes, this closes the hook-planting vector.
 
 Agent deletes critical files: low. Mitigated by human PR review.
 
