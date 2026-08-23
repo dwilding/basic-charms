@@ -530,9 +530,7 @@ def _run_probe(args) -> int:
                     encoding="utf-8",
                 )
             if args.github_output:
-                write_github_output(
-                    args.github_output, {"decision": "BLOCKED"}
-                )
+                write_github_output(args.github_output, {"decision": "BLOCKED"})
             return 0
         print(f"::error::OpenCode exited with status {rc}.", file=sys.stderr)
         if stderr:
