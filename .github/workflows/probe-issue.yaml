@@ -22,6 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       ISSUE_NUMBER: ${{ github.event.inputs.issue_number }}
+      OPENCODE_VERSION: '1.18.16'
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -38,7 +39,7 @@ jobs:
           node-version: '24'
 
       - name: Install OpenCode
-        run: npm install -g opencode-ai@1.18.16  # zizmor: ignore[adhoc-packages] pinned version, no lockfile available for global npm installs
+        run: npm install -g "opencode-ai@${OPENCODE_VERSION}"  # zizmor: ignore[adhoc-packages] pinned version, no lockfile available for global npm installs
 
       - name: Set up uv
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0

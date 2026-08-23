@@ -44,7 +44,7 @@ The `run_tox` tool is the exception: it lets the agent trigger tox inside an iso
 1. `workflow_dispatch` with `issue_number` (required).
 2. Checkout with `persist-credentials: false`, `fetch-depth: 0`. No git credentials in `.git/config` during the agent run.
 3. `git config core.hooksPath /dev/null` — defense in depth, inert hooks.
-4. Setup Node 24, install `opencode-ai@1.18.16`, set up uv.
+4. Setup Node 24, install `opencode-ai` (version pinned in the `OPENCODE_VERSION` env var in the workflow), set up uv.
 5. Prepare issue context: fetch the issue via `gh issue view` (title, body, comments) and write it to a markdown file.
 6. Run `probe_issue.py`:
    - Read the issue context file.
