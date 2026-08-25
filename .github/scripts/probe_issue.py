@@ -462,8 +462,8 @@ workflow parses for this exact string. Without it, the run fails even if you \
 made all the right changes.
 
 **After `run_tox` passes for all modified charms, end your output with a line \
-that starts with `IMPLEMENTATION_RESULT:` followed by a JSON object with two \
-fields:**
+that starts with `IMPLEMENTATION_RESULT:` followed by a JSON object with \
+exactly two fields:**
 
 - `title`: a compact PR title — a short phrase, not a full sentence. \
 Examples: "Try foo in bar tests", "log_level filters DEBUG from captured \
@@ -474,7 +474,13 @@ true, what the PR tests, and what green (or red) CI means for each claim. \
 Use proper markdown: headers (`##`), bullet points, code blocks (fenced \
 with triple backticks), and paragraphs separated by blank lines.
 
-For example:
+**The JSON must have exactly these two fields — `title` and `body`. Do not \
+invent other fields** (no `charms_modified`, `claim_tested`, `run_tox_result`, \
+etc.). Put all your reasoning inside `body`. The workflow parses only `title` \
+and `body`; any other fields are silently discarded.
+
+**The JSON must be on a single line.** Do not wrap it in a code block. \
+Escape newlines inside `body` as `\\n`. For example:
 
 ```
 IMPLEMENTATION_RESULT: {"title": "log_level filters DEBUG from captured logs", "body": "## Claims\\n\\n- **A**: log_level=INFO retains INFO logs in the captured section\\n- **B**: without it, DEBUG logs appear from log_file_level\\n\\nI believe the doc is correct. I added a test asserting ...\\n\\nIf CI passes, ... If CI fails, ..."}
@@ -652,10 +658,12 @@ def parse_decision(output: str) -> dict[str, str]:
             raise ValueError("IMPLEMENTATION_BLOCKER must not be empty.")
         return {"decision": "BLOCKED", "blocker": blocker}
 
+    # The agent may emit the JSON on a single line, across multiple lines,
+    # or wrapped in a ```json ... ``` code block. Handle all three.
     result_match = re.search(
-        r"^IMPLEMENTATION_RESULT:\s*(\{.*\})\s*$",
+        r"^IMPLEMENTATION_RESULT:\s*(?:```(?:json)?\s*)?(\{.*?\})\s*(?:```\s*)?$",
         output,
-        re.MULTILINE,
+        re.MULTILINE | re.DOTALL,
     )
     if not result_match:
         raise ValueError(
