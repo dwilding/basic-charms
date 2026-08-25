@@ -13,6 +13,7 @@ permission:
   web: deny
   task: deny
   run_tox: allow
+  fetch_url: allow
 ---
 
 # Doc-validation agent
