@@ -58,6 +58,8 @@ show_missing = true
 [tool.pytest.ini_options]
 minversion = "6.0"
 log_cli_level = "INFO"
+# Retain INFO logs in the "Captured log call" section when run interactively.
+log_level = "INFO"
 
 # Linting tools configuration
 [tool.ruff]

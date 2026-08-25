@@ -39,3 +39,26 @@ def test_deploy(charm: pathlib.Path, juju: jubilant.Juju):
     }
     juju.deploy(charm, app=APP_NAME, resources=resources)
     juju.wait(jubilant.all_active)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="without log_level=INFO, Jubilant INFO logs are not captured",
+)
+def test_jubilant_info_logs_captured(
+    charm: pathlib.Path, juju: jubilant.Juju, caplog: pytest.LogCaptureFixture
+):
+    """Jubilant's INFO logs must be retained in pytest's captured-log section."""
+    juju.wait(jubilant.all_active)
+    # Force Jubilant's logger to emit at INFO (the level the doc claim concerns) so the
+    # assertion is deterministic regardless of how Jubilant configures its own logger.
+    jubilant_logger = logging.getLogger("jubilant")
+    jubilant_logger.setLevel(logging.INFO)
+    jubilant_logger.info("integration test info probe")
+    captured_info = [
+        record
+        for record in caplog.records
+        if (record.name == "jubilant" or record.name.startswith("jubilant."))
+        and record.levelno >= logging.INFO
+    ]
+    assert captured_info, "expected Jubilant INFO logs to be retained in caplog"
