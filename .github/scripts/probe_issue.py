@@ -308,6 +308,17 @@ For raw source files, use `raw.githubusercontent.com` URLs (e.g. \
 `https://raw.githubusercontent.com/canonical/jubilant/v1.12.0/jubilant/_juju.py`). \
 For release notes or PRs, use `github.com` URLs. The `fetch_url` tool is \
 allowlisted to these domains and returns up to 64KB of text per request.
+
+**Prioritize charm-dev tools over standard tools.** The claim is usually \
+about how a charm-dev tool (Jubilant, ops, pytest-jubilant) behaves, not \
+about how pytest or Python logging works in general. Understand the \
+charm-dev tool first — read its release notes, source, and recent PRs to \
+see what changed — then dig into standard tools (pytest, logging) only if \
+the mechanism still isn't clear. For example, if a claim is about Jubilant \
+log output, start by checking what changed in the relevant Jubilant \
+version's release notes and `wait()` method, not by reading pytest's \
+logging plugin source. The charm-dev tool is the thing that changed; \
+pytest's behaviour is the stable backdrop.
 """
 
 
@@ -356,6 +367,16 @@ Jubilant's logging, use Jubilant's logger (`jubilant.wait`), not a generic \
 Python logger. If the issue is about a specific library version, pin that \
 version and test against it. Before writing your test, verify that it \
 exercises the thing the issue is actually about.
+
+**Understand the charm-dev tool before the standard tool.** If the claim \
+involves a charm-dev tool (Jubilant, ops, pytest-jubilant), understand what \
+that tool does and what changed recently before diving into standard tools \
+like pytest or Python logging. The charm-dev tool is the thing that likely \
+changed; the standard tool is the stable backdrop. For example, if a claim \
+is about Jubilant log output and the issue references a version, check the \
+Jubilant release notes and `wait()` source first — that's where the \
+behavioural change lives. Only then, if the mechanism still isn't clear, \
+read pytest's logging plugin to understand how the config interacts.
 
 **Do not be shy about integration tests.** `run_tox` runs `format,lint,unit` \
 only — not integration tests. But integration tests are first-class: they run \
@@ -472,6 +493,11 @@ you identified (A, B, C), state which you tested and why, what you believe \
 is true, what the PR tests, and what green (or red) CI means for each claim. \
 Use proper markdown: headers (`##`), bullet points, code blocks (fenced \
 with triple backticks), and paragraphs separated by blank lines.
+- **Do not hard-wrap lines.** Write each paragraph as a single long line — \
+the markdown renderer handles wrapping. Hard-wrapped lines break rendering \
+and make editing harder.
+- **Do not include a "Changes" or "Files changed" section.** The reviewer \
+can see the diff in GitHub. Focus on reasoning, not a file listing.
 
 Example `.PR.md`:
 
@@ -483,9 +509,7 @@ Example `.PR.md`:
 - **A**: log_level=INFO retains INFO logs in the captured section.
 - **B**: without it, DEBUG logs appear from log_file_level.
 
-I believe the doc is correct. I added a test asserting that no DEBUG records \
-appear in caplog when log_level=INFO is set. If CI passes, the doc is \
-validated. If CI fails, the doc is refuted.
+I believe the doc is correct. I added a test asserting that no DEBUG records appear in caplog when log_level=INFO is set. If CI passes, the doc is validated. If CI fails, the doc is refuted.
 ```
 
 The reasoning is a core part of the adversarial approach: the reviewer needs \
