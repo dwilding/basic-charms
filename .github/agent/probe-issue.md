@@ -129,17 +129,30 @@ name (validated against a fixed list).
 ## Output
 
 The happy path is the default: if you make file changes, the workflow treats
-that as IMPLEMENT and proceeds to path enforcement — no marker required. Only
-emit a marker when you cannot proceed:
+that as IMPLEMENT and proceeds to path enforcement. However, you MUST still
+emit a literal `IMPLEMENTATION_REASONING:` marker in your output — the
+workflow parses for this exact string at the start of a line. Without it, the
+run fails even if you made all the right changes.
 
-- `IMPLEMENTATION_BLOCKER: <maintainer-actionable reason>` — when you cannot
-  proceed. Do not create files or make edits when blocked.
+**After `run_tox` passes for all modified charms, end your output with a line
+that starts with `IMPLEMENTATION_REASONING:` followed by your reasoning.** For
+example:
 
-When you implement, `IMPLEMENTATION_REASONING:` is required — the reasoning is
-a core part of the adversarial approach: the reviewer needs it to interpret the
-CI results. State what the doc claims, what you believe is true, what the PR
-tests, and what green (or red) CI means for the doc. Without it, the workflow
-fails the run rather than opening a PR with a placeholder body.
+```
+IMPLEMENTATION_REASONING: I believe the doc is wrong about <claim>. I added a
+test asserting <what I believe is true>, which is expected to pass. If CI
+passes, the doc is incorrect.
+```
+
+The reasoning is a core part of the adversarial approach: the reviewer needs it
+to interpret the CI results. State what the doc claims, what you believe is
+true, what the PR tests, and what green (or red) CI means for the doc. Write
+it in plain conversational English (see Voice below). Do not use markdown
+headers or formatting — just plain text after the marker.
+
+If `run_tox` fails and you cannot fix the issue, emit
+`IMPLEMENTATION_BLOCKER: <maintainer-actionable reason>` instead. Do not
+create files or make edits when blocked.
 
 ## Voice
 
