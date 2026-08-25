@@ -159,6 +159,16 @@ Each charm directory (`kepler/`, `kosmos/`, `meteor/`, `micron/`) is a \
 self-contained charm project. The `libs/` directory holds shared charm \
 libraries.
 
+The charms come in two groups that are intended to go together:
+
+- **k- charms**: `kepler` and `kosmos` — structurally similar to each other.
+- **m- charms**: `meteor` and `micron` — structurally similar to each other.
+
+When doing differential testing across two charms, pick two from the **same \
+group** (e.g. kepler + kosmos, or meteor + micron) so the only meaningful \
+difference is the configuration you changed — not structural differences \
+between unrelated charms.
+
 ### Project structure (per charm directory)
 
 - `src/charm.py` — charm code using `ops.CharmBase`; entry point is \
@@ -360,7 +370,9 @@ different configurations, use the multiple charms available — there are four \
 (`kepler`, `kosmos`, `meteor`, `micron`), each with its own `pyproject.toml` \
 and test directories. This is especially useful for differential testing: \
 configure one charm one way and another differently, then run the same test \
-in both.
+in both. When doing so, pick two charms from the same group (k- charms: \
+kepler + kosmos; m- charms: meteor + micron) so the only meaningful \
+difference is the configuration you changed.
 
 ### Differential testing with xfail
 
@@ -386,9 +398,11 @@ those are workflow infrastructure, not charm code.
 etc. For example, a doc might make claim A ("X happens by default") and \
 claim B ("X does not happen with option Y"). The issue may reference \
 some or all of these claims, or raise new ones. Decide which claim(s) to test \
-and state your reasoning for the choice. If the issue hints at a version \
-dependency (e.g., "maybe there's a difference with the latest version"), \
-treat that as a separate claim to enumerate.
+and state your reasoning for the choice. **Pay attention to whether any \
+claim is conditioned on a specific library version** (e.g. "since 1.12", \
+"with the latest release") — if so, treat the version dependency as part \
+of the claim and pin the relevant version (see "Version-dependent claims" \
+below).
 4. Write a test that asserts your understanding — aiming for passing CI. Do \
 NOT write a test that merely echoes the documented behaviour without \
 independent reasoning; that is not adversarial. For example, if the docs \
@@ -419,11 +433,22 @@ PR. CI runs after the reviewer approves the workflow runs.
 
 ### Version-dependent claims
 
-If the issue or linked documentation references a specific library version or \
-a recent change, use the `fetch_url` tool to read the library's release notes \
-or PRs on GitHub. Use these to understand what changed between versions. You \
-can pin a specific version in pyproject.toml and run_tox will resolve it via \
-uv lock.
+Pay attention to whether a claim is conditioned on a specific library \
+version. The issue or linked documentation may say "since version X" or \
+"with the latest release" or hint at a version-dependent behaviour. If so, \
+use the `fetch_url` tool to read the library's release notes or PRs on \
+GitHub to understand what changed between versions and which version the \
+claim applies to.
+
+**Pin the version the claim is about.** Do not leave the existing loose \
+version spec (e.g. `jubilant>=1.8,<2`) in place when the claim is \
+version-dependent — the loose spec may resolve to a version that does not \
+exhibit the behaviour the claim is about. Pin the specific version the \
+claim references (e.g. `jubilant==1.12.0`). If the claim says "since 1.12", \
+pin 1.12.0. If the claim is about the latest behaviour, use `fetch_url` to \
+check the library's GitHub releases page for the latest tag and pin that. \
+This applies to every charm you modify — all modified charms should use the \
+same pinned version.
 """
 
 
