@@ -85,7 +85,8 @@ jobs:
             --branch "$branch" \
             --repo-root "$GITHUB_WORKSPACE" \
             --github-output "$GITHUB_OUTPUT" \
-            --reasoning-file "$RUNNER_TEMP/reasoning.md" \
+            --title-file "$RUNNER_TEMP/title.txt" \
+            --body-file "$RUNNER_TEMP/body.md" \
             --blocker-file "$RUNNER_TEMP/blocker.md" \
             --timeout 1200
 
@@ -145,18 +146,18 @@ jobs:
           git add --all
           git commit -m "Probe #$ISSUE_NUMBER"
           git push --force --set-upstream origin "$branch"
-          # The first line of the reasoning is the PR title.
-          title=$(head -1 "$RUNNER_TEMP/reasoning.md")
+          # The title and body are written to separate files by probe_issue.py.
+          title=$(cat "$RUNNER_TEMP/title.txt")
           # Create the PR, or update if it already exists.
           pr_url=$(gh pr create \
             --repo "$REPOSITORY" \
             --head "$branch" \
             --title "$title" \
-            --body-file "$RUNNER_TEMP/reasoning.md" \
+            --body-file "$RUNNER_TEMP/body.md" \
             2>/dev/null || \
             gh pr edit --repo "$REPOSITORY" "$branch" \
             --title "$title" \
-            --body-file "$RUNNER_TEMP/reasoning.md")
+            --body-file "$RUNNER_TEMP/body.md")
           echo "pr_url=$pr_url" >> "$GITHUB_OUTPUT"
 
       - name: Comment on issue
