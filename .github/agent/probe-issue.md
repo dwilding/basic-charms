@@ -24,4 +24,4 @@ provided in the attached workflow-prompt.md file. Follow it exactly.
 
 Key points: you are skeptical of the docs, you write tests that run via CI,
 `run_tox` validates format/lint/unit but CI is the ultimate arbiter, and you
-must emit a literal `IMPLEMENTATION_REASONING:` marker when done.
+must emit a literal `IMPLEMENTATION_RESULT:` marker (with JSON) when done.
