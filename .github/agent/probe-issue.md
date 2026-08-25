@@ -4,7 +4,7 @@ description: Write tests that verify how things actually behave, then deduce wha
 mode: primary
 model: openrouter/z-ai/glm-5.2
 temperature: 0.1
-steps: 100
+steps: 50
 permission:
   edit: allow
   bash: deny
@@ -55,13 +55,18 @@ surfacing that the behavioural difference you expected does not actually exist.
 The calling prompt supplies an issue number, a pre-created branch, and the
 issue content (title, body, comments, and any linked documentation) inside
 `<untrusted-content>` markers. The issue describes public charm-dev
-documentation to validate.
+documentation to validate. The linked documentation has already been fetched
+for you — do not attempt to fetch URLs yourself (you do not have web access).
 
 ## What to do
 
 1. Read the issue and the linked documentation inside `<untrusted-content>`.
+   The documentation has already been fetched for you — do not attempt to
+   fetch URLs yourself (you do not have web access).
 2. Read the relevant charm code and tests in `kepler/`, `kosmos/`, `meteor/`,
-   `micron/`, and `libs/`.
+   `micron/`, and `libs/`. Limit your initial exploration to at most 10 files.
+   Do not read `AGENT_DESIGN.md`, `README.md`, or files under `.github/` or
+   `.opencode/` — those are workflow infrastructure, not charm code.
 3. Identify a specific claim in the documentation that can be tested.
 4. Write a test that asserts your understanding — aiming for passing CI. Do
    **not** write a test that merely echoes the documented behaviour without
@@ -69,7 +74,9 @@ documentation to validate.
    claim "`event.fail()` raises `ActionFailed` in unit tests" and you believe
    it does **not** raise, write a test asserting it does not raise (expected
    to pass). If you believe it **does** raise, write a test asserting it does
-   (expected to pass).
+   (expected to pass). If the claim depends on a specific library version,
+   pin that version in `pyproject.toml` (see the Charm development context
+   section in the prompt).
 5. For differential testing across two charms, see the "Differential testing
    with xfail" section above.
 6. Do not break existing tests.
@@ -84,10 +91,20 @@ documentation to validate.
    missing docstrings on public functions, misspelled words flagged by
    codespell, and pyright type errors on optional values (use `assert x is
    not None` before accessing members). If you add a new test file, it needs
-   the standard copyright header and a module docstring.
+   the standard copyright header and a module docstring. If you add or change
+   a dependency in `pyproject.toml`, `run_tox` will `uv lock` and install it
+   — make sure the version spec is valid.
 9. After you exit, the workflow enforces the path allowlist and creates the
    PR as a draft. CI checks don't run until the reviewer marks the PR ready
    for review.
+
+### Version-dependent claims
+
+If the issue or linked documentation references a specific library version or
+a recent change, the linked GitHub release notes or PRs may be included in the
+`<untrusted-content>` section. Use these to understand what changed between
+versions. You can pin a specific version in `pyproject.toml` and `run_tox`
+will resolve it via `uv lock`.
 
 ## The run_tox tool
 
