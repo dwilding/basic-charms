@@ -56,7 +56,7 @@ The `fetch_url` tool is the other exception: it lets the agent fetch content fro
    - Compose the prompt: system constraints, runtime context, task instructions, untrusted content (delimited), output contract.
    - Stage the agent and tools: copy `.github/agent/probe-issue.md` to `.opencode/agents/` and `.github/tools/run_tox.ts` and `.github/tools/fetch_url.ts` to `.opencode/tools/`.
    - Run OpenCode with `--auto` (auto-approve permissions not explicitly denied) and a scrubbed environment: `PATH`, `HOME`, `USER`, `SHELL`, `LANG`, `OPENROUTER_API_KEY` only. No `GITHUB_TOKEN`, no `ACTIONS_ID_TOKEN_*`. `--auto` is required because the agent runs non-interactively — without it, tools that default to `"ask"` (like `glob`, `grep`, `list`) would prompt for approval and hang forever. Explicit `deny` rules (`bash`, `network`, `web`, `task`) are still enforced. The run is bounded by a 20-minute wall-clock timeout (1200s). If OpenCode exceeds it, the script converts the timeout into a `BLOCKED` decision with a clear "timed out" message rather than crashing — so the issue gets a useful comment instead of a bare workflow failure. The agent's step limit (`steps: 50`) is the other bound.
-   - Parse the decision: the happy path is the default. If an `IMPLEMENTATION_BLOCKER:` line is present, the decision is `BLOCKED` and the blocker text is written to a file. Otherwise the decision is `IMPLEMENT`; the `IMPLEMENTATION_REASONING:` text is required and written to a file — the reasoning is a core part of the adversarial approach, so its absence is a genuine failure, not something to paper over.
+   - Parse the decision: the happy path is the default. If an `IMPLEMENTATION_BLOCKER:` line is present, the decision is `BLOCKED` and the blocker text is written to a file. Otherwise the decision is `IMPLEMENT`; the `IMPLEMENTATION_RESULT:` line is required and contains a JSON object with `title` and `body` fields — the title is a compact PR title and the body is the full markdown PR description. The reasoning is a core part of the adversarial approach, so its absence is a genuine failure, not something to paper over.
 7. Cleanup: remove `.opencode/agents/probe-issue.md` and `.opencode/tools/run_tox.ts` and `.opencode/tools/fetch_url.ts` so they do not appear as changed paths.
 8. If `BLOCKED`: comment on the issue with the blocker reason. Done.
 9. If `IMPLEMENT`: enforce changed paths (inline bash in the YAML, not a Python file the agent could tamper with).
@@ -66,7 +66,7 @@ The `fetch_url` tool is the other exception: it lets the agent fetch content fro
    - Verify `.git/` was not modified (checks `git diff` and `git ls-files` for `.git/` paths). Reject if any `.git/` files were changed — this prevents the agent from planting hooks that would fire during `git add` or `git push`.
 10. Configure git credentials using `GITHUB_TOKEN` — only now, after enforcement passes and the agent has exited.
 11. `git add --all`, commit, push branch `probe/issue-<n>`.
-12. `gh pr create` with the first line of the agent's reasoning as the title, the reasoning file as the PR body. The body does not include `Closes #<n>`. GitHub requires approval before running CI workflows on PRs created by `GITHUB_TOKEN`.
+12. `gh pr create` with the title and body from the agent's `IMPLEMENTATION_RESULT` JSON output. The body does not include `Closes #<n>`. GitHub requires approval before running CI workflows on PRs created by `GITHUB_TOKEN`.
 13. Comment on the issue with the result (PR link, blocker, or failure message). This step always runs.
 
 ## Prompt composition
@@ -78,7 +78,7 @@ Six sections, composed by the Python script:
 3. Charm development context: project structure, dependency management (including how to pin versions via `pyproject.toml` and `run_tox`'s `uv lock`), `run_tox` scope, unit test patterns, integration test patterns, and linting conventions. This gives the agent the toolchain knowledge it needs without having to reverse-engineer it by reading files.
 4. Task instructions: the adversarial testing strategy (see below), including guidance to not fetch URLs (docs are already in the prompt), not read infrastructure files, limit exploration to 10 files, and handle version-dependent claims.
 5. Untrusted content: issue title, body, comments, fetched docs, all wrapped in `<untrusted-content>` markers.
-6. Output contract: the happy path is the default — if the agent makes file changes, the workflow treats that as `IMPLEMENT` and proceeds to path enforcement, no marker required. The agent only emits `IMPLEMENTATION_BLOCKER: <reason>` when it cannot proceed. When implementing, `IMPLEMENTATION_REASONING:` is required — a concise chain of reasoning for the PR body, written in plain conversational English (see Voice below). The reasoning is a core part of the adversarial approach: the reviewer needs it to interpret the CI results, so the workflow fails the run if it is absent rather than opening a PR with a placeholder body.
+6. Output contract: the happy path is the default — if the agent makes file changes, the workflow treats that as `IMPLEMENT` and proceeds to path enforcement, no marker required. The agent only emits `IMPLEMENTATION_BLOCKER: <reason>` when it cannot proceed. When implementing, `IMPLEMENTATION_RESULT:` is required — a JSON object with a compact `title` and a markdown `body` for the PR description, written in plain conversational English (see Voice below). The reasoning is a core part of the adversarial approach: the reviewer needs it to interpret the CI results, so the workflow fails the run if it is absent rather than opening a PR with a placeholder body.
 
 The prompt is transported to OpenCode as a file (`--file prompt.md`), not as argv, to avoid OS argument length limits with large issue or docs content.
 
@@ -99,7 +99,7 @@ Do not break existing tests. Modify charms and tests minimally to add the test. 
 
 ## PR body
 
-The PR title is the first line of the agent's reasoning (e.g. `foo happens when bar is integrated with baz`).
+The PR title is a compact phrase from the agent's `IMPLEMENTATION_RESULT` JSON (e.g. `foo happens when bar is integrated with baz`). The PR body is the `body` field from the same JSON, formatted as markdown.
 
 The PR body must contain the chain of reasoning so a reviewer can interpret the CI results. The agent writes: what the doc claims, what it believes is true, what the PR tests, and what green (or red) CI means for the doc, in plain conversational English. The reasoning must cover both directions so the reviewer can interpret either outcome. For example:
 

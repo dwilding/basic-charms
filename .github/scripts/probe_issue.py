@@ -352,6 +352,16 @@ in CI after the reviewer marks the PR ready. Write them when the claim is \
 about integration test behaviour. Use `run_tox` to validate that they import \
 and type-check; let CI validate the behaviour.
 
+**Be direct.** Prefer straightforward tests over clever workarounds. Do not \
+dynamically generate config files, spawn subprocesses, or write meta-tests \
+that test pytest itself. Configure the charm's `pyproject.toml` directly and \
+write tests that use the charm's own configuration. If you need to test \
+different configurations, use the multiple charms available — there are four \
+(`kepler`, `kosmos`, `meteor`, `micron`), each with its own `pyproject.toml` \
+and test directories. This is especially useful for differential testing: \
+configure one charm one way and another differently, then run the same test \
+in both.
+
 ### Differential testing with xfail
 
 Sometimes a claim is best tested by showing that the SAME test behaves \
@@ -422,30 +432,32 @@ OUTPUT_CONTRACT = """\
 
 The happy path is the default: if you make file changes, the workflow treats \
 that as IMPLEMENT and proceeds to path enforcement. However, you MUST still \
-emit a literal `IMPLEMENTATION_REASONING:` marker in your output — the \
-workflow parses for this exact string at the start of a line. Without it, the \
-run fails even if you made all the right changes.
+emit a literal `IMPLEMENTATION_RESULT:` marker in your output — the \
+workflow parses for this exact string. Without it, the run fails even if you \
+made all the right changes.
 
 **After `run_tox` passes for all modified charms, end your output with a line \
-that starts with `IMPLEMENTATION_REASONING:` followed by your reasoning.** \
-The first line of your reasoning becomes the PR title, so start with a \
-condensed title — a short phrase like "Try foo in bar tests" or "log_level \
-filters DEBUG from captured logs". Then continue with the full reasoning on \
-subsequent lines. For example:
+that starts with `IMPLEMENTATION_RESULT:` followed by a JSON object with two \
+fields:**
+
+- `title`: a compact PR title — a short phrase, not a full sentence. \
+Examples: "Try foo in bar tests", "log_level filters DEBUG from captured \
+logs". Must not exceed 70 characters.
+- `body`: the full PR description in markdown. Enumerate the claims you \
+identified (A, B, C), state which you tested and why, what you believe is \
+true, what the PR tests, and what green (or red) CI means for each claim. \
+Use proper markdown: headers (`##`), bullet points, code blocks (fenced \
+with triple backticks), and paragraphs separated by blank lines.
+
+For example:
 
 ```
-IMPLEMENTATION_REASONING: log_level=INFO does not affect Jubilant's captured logs when log_cli_level is already INFO
-
-The doc claims A: ... and B: ... I believe ... I added a test asserting ...
-If CI passes, ... If CI fails, ...
+IMPLEMENTATION_RESULT: {"title": "log_level filters DEBUG from captured logs", "body": "## Claims\\n\\n- **A**: log_level=INFO retains INFO logs in the captured section\\n- **B**: without it, DEBUG logs appear from log_file_level\\n\\nI believe the doc is correct. I added a test asserting ...\\n\\nIf CI passes, ... If CI fails, ..."}
 ```
 
 The reasoning is a core part of the adversarial approach: the reviewer needs it \
-to interpret the CI results. Enumerate the claims you identified (A, B, C), \
-state which you tested and why, what you believe is true, what the PR tests, \
-and what green (or red) CI means for each claim. Write it in plain \
-conversational English (see Voice below). Do not use markdown headers or \
-formatting — just plain text after the marker.
+to interpret the CI results. Write it in plain conversational English (see Voice \
+below).
 
 If `run_tox` fails and you cannot fix the issue, emit \
 `IMPLEMENTATION_BLOCKER: <maintainer-actionable reason>` instead. Do not \
@@ -600,10 +612,9 @@ def parse_decision(output: str) -> dict[str, str]:
 
     The blocker is the explicit opt-out: if an `IMPLEMENTATION_BLOCKER:` line is
     present, the decision is BLOCKED. Otherwise the decision is IMPLEMENT (the
-    happy path is the default), and the reasoning is taken from the required
-    `IMPLEMENTATION_REASONING:` line. The reasoning is a core part of the
-    adversarial approach — the reviewer needs it to interpret the CI results —
-    so its absence is a genuine failure, not something to paper over.
+    happy path is the default), and the result is taken from the required
+    `IMPLEMENTATION_RESULT:` line, which contains a JSON object with `title`
+    and `body` fields.
     """
     blocker_match = re.search(
         r"^IMPLEMENTATION_BLOCKER:\s*(.+?)\s*$",
@@ -616,22 +627,32 @@ def parse_decision(output: str) -> dict[str, str]:
             raise ValueError("IMPLEMENTATION_BLOCKER must not be empty.")
         return {"decision": "BLOCKED", "blocker": blocker}
 
-    reasoning_match = re.search(
-        r"^IMPLEMENTATION_REASONING:\s*(.*)$",
+    result_match = re.search(
+        r"^IMPLEMENTATION_RESULT:\s*(\{.*\})\s*$",
         output,
-        re.MULTILINE | re.DOTALL,
+        re.MULTILINE,
     )
-    if not reasoning_match:
+    if not result_match:
         raise ValueError(
-            "IMPLEMENT requires an IMPLEMENTATION_REASONING line. The reasoning "
-            "is a core part of the adversarial approach — the reviewer needs it to "
-            "interpret the CI results. If the agent stopped without one, that is a "
-            "genuine failure worth investigating, not something to paper over."
+            "IMPLEMENT requires an IMPLEMENTATION_RESULT line with a JSON "
+            "object containing 'title' and 'body' fields. If the agent stopped "
+            "without one, that is a genuine failure worth investigating, not "
+            "something to paper over."
         )
-    reasoning = reasoning_match.group(1).strip()
-    if not reasoning:
-        raise ValueError("IMPLEMENTATION_REASONING must not be empty.")
-    return {"decision": "IMPLEMENT", "reasoning": reasoning}
+    import json
+
+    try:
+        result = json.loads(result_match.group(1))
+    except json.JSONDecodeError as e:
+        raise ValueError(f"IMPLEMENTATION_RESULT contains invalid JSON: {e}") from e
+
+    title = result.get("title", "").strip()
+    body = result.get("body", "").strip()
+    if not title:
+        raise ValueError("IMPLEMENTATION_RESULT 'title' must not be empty.")
+    if not body:
+        raise ValueError("IMPLEMENTATION_RESULT 'body' must not be empty.")
+    return {"decision": "IMPLEMENT", "title": title, "body": body}
 
 
 # ---------------------------------------------------------------------------
@@ -678,10 +699,16 @@ def main(argv: list[str] | None = None) -> int:
         help="Path to write $GITHUB_OUTPUT lines to.",
     )
     parser.add_argument(
-        "--reasoning-file",
+        "--title-file",
         type=Path,
         default=None,
-        help="Path to write the IMPLEMENTATION_REASONING text to.",
+        help="Path to write the PR title to.",
+    )
+    parser.add_argument(
+        "--body-file",
+        type=Path,
+        default=None,
+        help="Path to write the PR body to.",
     )
     parser.add_argument(
         "--blocker-file",
@@ -773,8 +800,11 @@ def _run_probe(args) -> int:
         write_github_output(args.github_output, {"decision": result["decision"]})
 
     # 8. Write reasoning/blocker to files for the workflow to read safely.
-    if result["decision"] == "IMPLEMENT" and args.reasoning_file:
-        args.reasoning_file.write_text(result["reasoning"], encoding="utf-8")
+    if result["decision"] == "IMPLEMENT":
+        if args.title_file:
+            args.title_file.write_text(result["title"], encoding="utf-8")
+        if args.body_file:
+            args.body_file.write_text(result["body"], encoding="utf-8")
     if result["decision"] == "BLOCKED" and args.blocker_file:
         args.blocker_file.write_text(result["blocker"], encoding="utf-8")
 
@@ -782,7 +812,8 @@ def _run_probe(args) -> int:
     if result["decision"] == "BLOCKED":
         print(f"IMPLEMENTATION_BLOCKER: {result['blocker']}")
     else:
-        print(f"IMPLEMENTATION_REASONING: {result['reasoning']}")
+        print(f"TITLE: {result['title']}")
+        print(f"BODY: {result['body']}")
 
     return 0
 
