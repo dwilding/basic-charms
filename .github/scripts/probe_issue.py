@@ -280,6 +280,22 @@ accessing members of optional values.
 - Codespell: runs on the whole charm dir. Avoid common misspellings.
 - New test files need the Apache 2.0 copyright header and a module docstring.
 - Public functions need docstrings (D103). Test functions are exempt.
+
+### Tool source code
+
+Dependencies like Jubilant and pytest-jubilant are installed inside the \
+`run_tox` container — they are not in the working tree. Do not search the \
+local filesystem for installed package source. If you need to understand \
+how a library works, read its source on GitHub:
+
+- **ops** (charm framework): https://github.com/canonical/operator
+- **Jubilant** (Juju CLI wrapper): https://github.com/canonical/jubilant
+- **pytest-jubilant** (pytest plugin): https://github.com/canonical/pytest-jubilant
+- **pytest**: https://github.com/pytest-dev/pytest
+
+These domains are allowlisted for doc fetching, so GitHub URLs in the issue \
+or docs will be fetched for you. You can also find release notes and PRs on \
+GitHub to understand what changed between versions.
 """
 
 
