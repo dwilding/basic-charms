@@ -486,7 +486,7 @@ to a file named `.PR.md` in the repository root.** This is a normal markdown \
 document:
 
 - The first line must be a `# ` heading containing the PR title — a short \
-phrase, not a full sentence. Must not exceed 70 characters. Examples: \
+phrase, not a full sentence. Must not exceed 100 characters. Examples: \
 "Try foo in bar tests", "log_level filters DEBUG from captured logs".
 - Everything after the title heading is the PR body. Enumerate the claims \
 you identified (A, B, C), state which you tested and why, what you believe \
@@ -708,9 +708,9 @@ def read_pr_description(repo_root: Path) -> dict[str, str]:
     title = title_match.group(1).strip()
     if not title:
         raise ValueError(f"{PR_DESCRIPTION_FILENAME} heading must not be empty.")
-    if len(title) > 70:
+    if len(title) > 100:
         raise ValueError(
-            f"{PR_DESCRIPTION_FILENAME} title must not exceed 70 characters "
+            f"{PR_DESCRIPTION_FILENAME} title must not exceed 100 characters "
             f"(got {len(title)})."
         )
 
