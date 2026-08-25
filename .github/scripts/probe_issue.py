@@ -400,10 +400,10 @@ cannot fix the issue, emit `IMPLEMENTATION_BLOCKER:` instead.
 `pyproject.toml`. Common pitfalls: unused imports, lines over 99 chars, \
 missing docstrings on public functions, misspelled words flagged by \
 codespell, and pyright type errors on optional values (use `assert x is not \
-None` before accessing members). If you add a new test file, it needs the \
-standard copyright header and a module docstring. If you add or change a \
-dependency in pyproject.toml, run_tox will uv lock and install it — make \
-sure the version spec is valid.
+None` before accessing members). Keep code comments to a bare minimum — \
+the PR description provides the longer explanation. Do not add copyright \
+headers to new files. If you add or change a dependency in pyproject.toml, \
+run_tox will uv lock and install it — make sure the version spec is valid.
 9. After you exit, the workflow enforces the path allowlist and creates the \
 PR. CI runs after the reviewer approves the workflow runs.
 

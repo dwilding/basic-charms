@@ -66,7 +66,7 @@ The `fetch_url` tool is the other exception: it lets the agent fetch content fro
    - Verify `.git/` was not modified (checks `git diff` and `git ls-files` for `.git/` paths). Reject if any `.git/` files were changed — this prevents the agent from planting hooks that would fire during `git add` or `git push`.
 10. Configure git credentials using `GITHUB_TOKEN` — only now, after enforcement passes and the agent has exited.
 11. `git add --all`, commit, push branch `probe/issue-<n>`.
-12. `gh pr create` with title `verify: <first line of reasoning>`, the agent's reasoning file as the PR body. The body does not include `Closes #<n>`. GitHub requires approval before running CI workflows on PRs created by `GITHUB_TOKEN`.
+12. `gh pr create` with the first line of the agent's reasoning as the title, the reasoning file as the PR body. The body does not include `Closes #<n>`. GitHub requires approval before running CI workflows on PRs created by `GITHUB_TOKEN`.
 13. Comment on the issue with the result (PR link, blocker, or failure message). This step always runs.
 
 ## Prompt composition
@@ -99,7 +99,7 @@ Do not break existing tests. Modify charms and tests minimally to add the test. 
 
 ## PR body
 
-The PR title is `verify: ` followed by the first line of the agent's reasoning (e.g. `verify: foo happens when bar is integrated with baz`).
+The PR title is the first line of the agent's reasoning (e.g. `foo happens when bar is integrated with baz`).
 
 The PR body must contain the chain of reasoning so a reviewer can interpret the CI results. The agent writes: what the doc claims, what it believes is true, what the PR tests, and what green (or red) CI means for the doc, in plain conversational English. The reasoning must cover both directions so the reviewer can interpret either outcome. For example:
 
