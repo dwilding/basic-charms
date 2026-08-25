@@ -85,8 +85,7 @@ jobs:
             --branch "$branch" \
             --repo-root "$GITHUB_WORKSPACE" \
             --github-output "$GITHUB_OUTPUT" \
-            --title-file "$RUNNER_TEMP/title.txt" \
-            --body-file "$RUNNER_TEMP/body.md" \
+            --pr-description "$RUNNER_TEMP/PR.md" \
             --blocker-file "$RUNNER_TEMP/blocker.md" \
             --timeout 1200
 
@@ -104,7 +103,7 @@ jobs:
           offenders=""
           for path in $changed; do
             case "$path" in
-              kepler/*|kosmos/*|meteor/*|micron/*|libs/*) ;;
+              kepler/*|kosmos/*|meteor/*|micron/*|libs/*|.PR.md) ;;
               *)
                 offenders="${offenders}${path}"$'\n'
                 ;;
@@ -113,7 +112,7 @@ jobs:
           if [ -n "$offenders" ]; then
             echo "::error::Agent modified paths outside the allowed directories:" >&2
             printf '%s' "$offenders" >&2
-            echo "Allowed: kepler/, kosmos/, meteor/, micron/, libs/" >&2
+            echo "Allowed: kepler/, kosmos/, meteor/, micron/, libs/, .PR.md" >&2
             exit 1
           fi
           # Verify .git/ was not tampered with. The agent has edit: allow,
@@ -143,21 +142,27 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${REPOSITORY}.git"
           git checkout -B "$branch"
+          # Extract title and body from .PR.md, then remove it so it's not in the PR diff.
+          # The title is the first '# ' heading; the body is everything after it.
+          pr_file="$GITHUB_WORKSPACE/.PR.md"
+          title=$(sed -n 's/^# //p' "$pr_file" | head -1)
+          body_file="$RUNNER_TEMP/body.md"
+          # Write body = everything after the first heading line.
+          awk 'found {print} /^# / {found=1}' "$pr_file" > "$body_file"
+          rm -f "$pr_file"
           git add --all
           git commit -m "Probe #$ISSUE_NUMBER"
           git push --force --set-upstream origin "$branch"
-          # The title and body are written to separate files by probe_issue.py.
-          title=$(cat "$RUNNER_TEMP/title.txt")
           # Create the PR, or update if it already exists.
           pr_url=$(gh pr create \
             --repo "$REPOSITORY" \
             --head "$branch" \
             --title "$title" \
-            --body-file "$RUNNER_TEMP/body.md" \
+            --body-file "$body_file" \
             2>/dev/null || \
             gh pr edit --repo "$REPOSITORY" "$branch" \
             --title "$title" \
-            --body-file "$RUNNER_TEMP/body.md")
+            --body-file "$body_file")
           echo "pr_url=$pr_url" >> "$GITHUB_OUTPUT"
 
       - name: Comment on issue

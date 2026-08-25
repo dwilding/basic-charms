@@ -24,4 +24,5 @@ provided in the attached workflow-prompt.md file. Follow it exactly.
 
 Key points: you are skeptical of the docs, you write tests that run via CI,
 `run_tox` validates format/lint/unit but CI is the ultimate arbiter, and you
-must emit a literal `IMPLEMENTATION_RESULT:` marker (with JSON) when done.
+must write a `.PR.md` file (markdown with a `# ` title heading) when done.
+If you cannot proceed, emit `IMPLEMENTATION_BLOCKER:` instead.
