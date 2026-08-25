@@ -152,6 +152,137 @@ def runtime_context(repository: str, issue_number: int, branch: str) -> str:
     )
 
 
+CHARM_DEV_CONTEXT = """\
+## Charm development context
+
+Each charm directory (`kepler/`, `kosmos/`, `meteor/`, `micron/`) is a \
+self-contained charm project. The `libs/` directory holds shared charm \
+libraries.
+
+### Project structure (per charm directory)
+
+- `src/charm.py` — charm code using `ops.CharmBase`; entry point is \
+`ops.main(MyCharm)`.
+- `src/<module>.py` — optional workload-logic modules.
+- `tests/unit/` — unit tests using `ops.testing.Context` and \
+`ops.testing.State` (run via `tox -e unit`).
+- `tests/integration/` — integration tests using `jubilant` and \
+`pytest-jubilant` (run via `tox -e integration`).
+- `tests/integration/conftest.py` — defines the `charm` fixture (finds the \
+packed `.charm` file).
+- `pyproject.toml` — dependencies in `[dependency-groups]` (lint, unit, \
+integration), pytest config in `[tool.pytest.ini_options]`, ruff/pyright/\
+codespell config.
+- `uv.lock` — lockfile, regenerated from `pyproject.toml` by `uv lock`.
+- `tox.ini` — tox environments: `format` (ruff format + check --fix), `lint` \
+(codespell, ruff check, ruff format --check, pyright), `unit` (coverage + \
+pytest), `integration` (pytest with `--log-cli-level=INFO`).
+- `charmcraft.yaml` — charm metadata, containers, resources, config, parts.
+
+### Dependency management
+
+Dependencies are in `pyproject.toml` under `[dependency-groups]`. The \
+`integration` group includes `jubilant>=1.8,<2` and \
+`pytest-jubilant>=2.0.1,<3`.
+
+You can pin a specific dependency version by editing `pyproject.toml` (e.g. \
+change `\"jubilant>=1.8,<2\"` to `\"jubilant==1.12.0\"`). When you call \
+`run_tox`, it runs `uv lock` first, which regenerates `uv.lock` from your \
+`pyproject.toml` — so the version you pin is the version that gets installed \
+and tested. The lockfile change is included in the PR automatically.
+
+### run_tox scope
+
+`run_tox` runs `tox -e format,lint,unit` only — not integration tests. \
+Integration tests require a Juju controller and a packed `.charm` file. They \
+run in per-charm CI after the PR is marked ready for review. You can write \
+integration tests and validate that they import and type-check via `run_tox` \
+(lint runs pyright), but you cannot run them yourself. Write the test, \
+validate with `run_tox`, and let CI confirm or refute.
+
+### Unit test patterns
+
+Use `ops.testing.Context(MyCharm)` and `ops.testing.State` to simulate charm \
+lifecycle events in-process — no Juju controller needed.
+
+```python
+from ops import testing
+from charm import MyCharm
+
+def test_pebble_ready():
+    ctx = testing.Context(MyCharm)
+    container = testing.Container(name='demo-server', can_connect=True)
+    state_in = testing.State(containers={container}, leader=True)
+    state_out = ctx.run(ctx.on.pebble_ready(container), state_in)
+    assert state_out.unit_status == testing.ActiveStatus()
+```
+
+Key `testing.State` fields: `config`, `leader`, `containers`, `relations`, \
+`secrets`, `storages`, `networks`, `app_status`, `unit_status`, \
+`planned_units`, `deferred`, `stored_states`, `opened_ports`, `resources`.
+
+Key events via `ctx.on`: `install()`, `start()`, `config_changed()`, \
+`pebble_ready(container)`, `relation_changed(rel)`, `leader_elected()`, \
+`update_status()`, `action(name, params)`.
+
+`ctx.run()` returns a new `State` — the input state is not modified. Assert \
+on `state_out.unit_status`, `state_out.get_container(name).plan`, \
+`state_out.get_relations(endpoint)`, `ctx.juju_log`, \
+`ctx.unit_status_history`, `ctx.emitted_events`.
+
+Use `testing.State.from_context(ctx, leader=True)` to auto-populate \
+containers and relations from the charm's metadata.
+
+For mocking beyond State (e.g. Kubernetes clients): \
+`with patch('charm.lightkube.Client'): yield MyCharm`, then pass the patched \
+charm type to `Context`.
+
+### Integration test patterns
+
+The `juju` fixture (from `pytest-jubilant`) is module-scoped, creates a \
+temporary Juju model, and tears it down when the module's tests finish. Use \
+`jubilant.Juju` as the type annotation. The `charm` fixture (from \
+`conftest.py`) returns the path to the packed `.charm` file.
+
+```python
+import jubilant
+import pytest
+
+@pytest.mark.juju_setup
+def test_deploy(charm, juju: jubilant.Juju):
+    juju.deploy(charm, app='my-app')
+    juju.wait(jubilant.all_active)
+```
+
+Key Jubilant helpers: `jubilant.all_active(status, *apps)`, \
+`all_blocked`, `all_waiting`, `all_maintenance`, `all_error`, \
+`any_error`, `all_agents_idle`. Use `juju.wait(ready, \
+error=jubilant.any_error)` to raise if any app goes to error while waiting.
+
+Other Jubilant methods: `juju.config(app, {'key': 'value'})`, \
+`juju.run('app/0', 'action-name', {'param': 'value'})` (returns a `Task` \
+with `.results`, `.status`, `.success`), `juju.integrate('app1:ep1', \
+'app2:ep2')`, `juju.status()` (returns `Status` with `.apps`, `.model`).
+
+Mark deployment tests with `@pytest.mark.juju_setup` and destructive tests \
+with `@pytest.mark.juju_teardown`.
+
+`caplog` works in integration tests — use it to assert on log records from \
+Jubilant's `jubilant.wait` logger or the charm's logger.
+
+### Linting conventions
+
+- Ruff: line-length 99. Tests are exempt from docstring requirements \
+(D100-D104). `run_tox` runs `ruff format` then `ruff check` — let it \
+reformat your code.
+- Pyright: runs on `src` and `tests`. Use `assert x is not None` before \
+accessing members of optional values.
+- Codespell: runs on the whole charm dir. Avoid common misspellings.
+- New test files need the Apache 2.0 copyright header and a module docstring.
+- Public functions need docstrings (D103). Test functions are exempt.
+"""
+
+
 TASK_INSTRUCTIONS = """\
 ## Task instructions
 
@@ -190,9 +321,13 @@ surfacing that the behavioural difference you expected does not actually exist.
 
 ### Steps
 
-1. Read the issue and the linked documentation inside <untrusted-content>.
+1. Read the issue and the linked documentation inside <untrusted-content>. \
+The documentation has already been fetched for you — do not attempt to fetch \
+URLs yourself (you do not have web access).
 2. Read the relevant charm code and tests in kepler/, kosmos/, meteor/, \
-micron/, and libs/.
+micron/, and libs/. Limit your initial exploration to at most 10 files. Do \
+not read AGENT_DESIGN.md, README.md, or files under .github/ or .opencode/ — \
+those are workflow infrastructure, not charm code.
 3. Identify a specific claim in the documentation that can be tested.
 4. Write a test that asserts your understanding — aiming for passing CI. Do \
 NOT write a test that merely echoes the documented behaviour without \
@@ -200,7 +335,8 @@ independent reasoning; that is not adversarial. For example, if the docs \
 claim "event.fail() raises ActionFailed in unit tests" and you believe it \
 does NOT raise, write a test asserting it does not raise (expected to pass). \
 If you believe it DOES raise, write a test asserting it does (expected to \
-pass).
+pass). If the claim depends on a specific library version, pin that version \
+in pyproject.toml (see the Charm development context section above).
 5. For differential testing across two charms, see the "Differential testing \
 with xfail" section above.
 6. Do not break existing tests.
@@ -215,10 +351,20 @@ cannot fix the issue, emit `IMPLEMENTATION_BLOCKER:` instead.
 missing docstrings on public functions, misspelled words flagged by \
 codespell, and pyright type errors on optional values (use `assert x is not \
 None` before accessing members). If you add a new test file, it needs the \
-standard copyright header and a module docstring.
+standard copyright header and a module docstring. If you add or change a \
+dependency in pyproject.toml, run_tox will uv lock and install it — make \
+sure the version spec is valid.
 9. After you exit, the workflow enforces the path allowlist and creates the \
 PR as a draft. CI checks don't run until the reviewer marks the PR ready for \
 review.
+
+### Version-dependent claims
+
+If the issue or linked documentation references a specific library version or \
+a recent change, the linked GitHub release notes or PRs may be included in \
+the <untrusted-content> section. Use these to understand what changed between \
+versions. You can pin a specific version in pyproject.toml and run_tox will \
+resolve it via uv lock.
 """
 
 
@@ -271,7 +417,7 @@ def compose_prompt(
     issue_context: str,
     linked_docs: str,
 ) -> str:
-    """Compose the five-section prompt."""
+    """Compose the six-section prompt."""
     untrusted_parts = [issue_context]
     if linked_docs:
         untrusted_parts.append(f"\n## Linked documentation\n\n{linked_docs}")
@@ -281,6 +427,8 @@ def compose_prompt(
         SYSTEM_CONSTRAINTS
         + "\n"
         + runtime_context(repository, issue_number, branch)
+        + "\n"
+        + CHARM_DEV_CONTEXT
         + "\n"
         + TASK_INSTRUCTIONS
         + "\n"
