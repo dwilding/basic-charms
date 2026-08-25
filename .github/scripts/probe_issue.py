@@ -429,9 +429,9 @@ run fails even if you made all the right changes.
 **After `run_tox` passes for all modified charms, end your output with a line \
 that starts with `IMPLEMENTATION_REASONING:` followed by your reasoning.** \
 The first line of your reasoning becomes the PR title, so start with a \
-concise summary — one short sentence that captures what you believe and \
-what the test checks. Then continue with the full reasoning on subsequent \
-lines. For example:
+condensed title — a short phrase like "Try foo in bar tests" or "log_level \
+filters DEBUG from captured logs". Then continue with the full reasoning on \
+subsequent lines. For example:
 
 ```
 IMPLEMENTATION_REASONING: log_level=INFO does not affect Jubilant's captured logs when log_cli_level is already INFO
