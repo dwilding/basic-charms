@@ -285,17 +285,18 @@ accessing members of optional values.
 
 Dependencies like Jubilant and pytest-jubilant are installed inside the \
 `run_tox` container — they are not in the working tree. Do not search the \
-local filesystem for installed package source. If you need to understand \
-how a library works, read its source on GitHub:
+local filesystem for installed package source. Use the `fetch_url` tool to \
+read source code, release notes, or PRs on GitHub on demand:
 
 - **ops** (charm framework): https://github.com/canonical/operator
 - **Jubilant** (Juju CLI wrapper): https://github.com/canonical/jubilant
 - **pytest-jubilant** (pytest plugin): https://github.com/canonical/pytest-jubilant
 - **pytest**: https://github.com/pytest-dev/pytest
 
-These domains are allowlisted for doc fetching, so GitHub URLs in the issue \
-or docs will be fetched for you. You can also find release notes and PRs on \
-GitHub to understand what changed between versions.
+For raw source files, use `raw.githubusercontent.com` URLs (e.g. \
+`https://raw.githubusercontent.com/canonical/jubilant/v1.12.0/jubilant/_juju.py`). \
+For release notes or PRs, use `github.com` URLs. The `fetch_url` tool is \
+allowlisted to these domains and returns up to 64KB of text per request.
 """
 
 
@@ -409,10 +410,10 @@ PR. CI runs after the reviewer approves the workflow runs.
 ### Version-dependent claims
 
 If the issue or linked documentation references a specific library version or \
-a recent change, the linked GitHub release notes or PRs may be included in \
-the <untrusted-content> section. Use these to understand what changed between \
-versions. You can pin a specific version in pyproject.toml and run_tox will \
-resolve it via uv lock.
+a recent change, use the `fetch_url` tool to read the library's release notes \
+or PRs on GitHub. Use these to understand what changed between versions. You \
+can pin a specific version in pyproject.toml and run_tox will resolve it via \
+uv lock.
 """
 
 
@@ -508,7 +509,7 @@ def compose_prompt(
 
 
 def stage_agent_and_tool(repo_root: Path) -> list[Path]:
-    """Copy the agent definition and run_tox tool into .opencode/. Return staged paths."""
+    """Copy the agent definition and tools into .opencode/. Return staged paths."""
     staged: list[Path] = []
 
     agents_dir = repo_root / ".opencode" / "agents"
@@ -519,9 +520,10 @@ def stage_agent_and_tool(repo_root: Path) -> list[Path]:
 
     tools_dir = repo_root / ".opencode" / "tools"
     tools_dir.mkdir(parents=True, exist_ok=True)
-    tool_dest = tools_dir / "run_tox.ts"
-    shutil.copy2(repo_root / ".github" / "tools" / "run_tox.ts", tool_dest)
-    staged.append(tool_dest)
+    for tool_name in ("run_tox.ts", "fetch_url.ts"):
+        tool_dest = tools_dir / tool_name
+        shutil.copy2(repo_root / ".github" / "tools" / tool_name, tool_dest)
+        staged.append(tool_dest)
 
     return staged
 

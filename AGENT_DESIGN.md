@@ -9,6 +9,7 @@ A manually dispatched GitHub Action in `basic-charms` that reads an issue descri
 - `.github/workflows/probe-issue.yaml` — the workflow.
 - `.github/agent/probe-issue.md` — OpenCode agent definition.
 - `.github/tools/run_tox.ts` — OpenCode custom tool that runs tox inside a Docker container.
+- `.github/tools/fetch_url.ts` — OpenCode custom tool that fetches content from allowlisted domains.
 - `.github/scripts/probe_issue.py` — compose prompt, run OpenCode, parse decision.
 - `.github/scripts/run_tox_in_container.py` — run tox inside a Docker container for security isolation.
 
@@ -33,13 +34,14 @@ permission:
   web: deny
   task: deny
   run_tox: allow
+  fetch_url: allow
 ```
 
-The agent can read and edit files, and call the `run_tox` custom tool. Nothing else. It cannot run shell commands, reach the network, or delegate. `bash: deny` is the single most important control: every critical escape vector (direct push, git hooks, `/proc` env access, network exfiltration, background processes, git config manipulation, package installation, git filter injection) requires command execution. With `bash: deny` the agent's only output is file changes in the working tree, which are fully visible to enforcement and human review.
-# Retain INFO logs in the "Captured log call" section when run interactively.
-# Otherwise, that section will have DEBUG logs (coming from log_file_level).
-log_level = "INFO
+The agent can read and edit files, and call the `run_tox` and `fetch_url` custom tools. Nothing else. It cannot run shell commands, reach the network via built-in tools, or delegate. `bash: deny` is the single most important control: every critical escape vector (direct push, git hooks, `/proc` env access, network exfiltration, background processes, git config manipulation, package installation, git filter injection) requires command execution. With `bash: deny` the agent's only output is file changes in the working tree, which are fully visible to enforcement and human review.
+
 The `run_tox` tool is the exception: it lets the agent trigger tox inside an isolated Docker container. The tool runs a fixed script (`run_tox_in_container.py`) that the agent cannot modify; the only input the agent controls is the charm name (validated against a fixed list). The container has no secrets and no `.git/` access, so even if the agent injected malicious commands into `tox.ini` or test files, they cannot escape. See "The run_tox tool" below.
+
+The `fetch_url` tool is the other exception: it lets the agent fetch content from allowlisted domains (canonical.com, ubuntu.com, raw.githubusercontent.com, github.com) to read library source code, release notes, and docs on demand. The tool validates the URL against the allowlist, uses GET only, and truncates at 64KB. See "The fetch_url tool" below.
 
 ## Workflow flow
 
@@ -52,10 +54,10 @@ The `run_tox` tool is the exception: it lets the agent trigger tox inside an iso
    - Read the issue context file.
    - Extract URLs from the issue and fetch linked documentation. Domain-allowlisted: `canonical.com`, `ubuntu.com`, `raw.githubusercontent.com`, `github.com`. Max 5 URLs, 64KB each.
    - Compose the prompt: system constraints, runtime context, task instructions, untrusted content (delimited), output contract.
-   - Stage the agent and tool: copy `.github/agent/probe-issue.md` to `.opencode/agents/` and `.github/tools/run_tox.ts` to `.opencode/tools/`.
+   - Stage the agent and tools: copy `.github/agent/probe-issue.md` to `.opencode/agents/` and `.github/tools/run_tox.ts` and `.github/tools/fetch_url.ts` to `.opencode/tools/`.
    - Run OpenCode with `--auto` (auto-approve permissions not explicitly denied) and a scrubbed environment: `PATH`, `HOME`, `USER`, `SHELL`, `LANG`, `OPENROUTER_API_KEY` only. No `GITHUB_TOKEN`, no `ACTIONS_ID_TOKEN_*`. `--auto` is required because the agent runs non-interactively — without it, tools that default to `"ask"` (like `glob`, `grep`, `list`) would prompt for approval and hang forever. Explicit `deny` rules (`bash`, `network`, `web`, `task`) are still enforced. The run is bounded by a 20-minute wall-clock timeout (1200s). If OpenCode exceeds it, the script converts the timeout into a `BLOCKED` decision with a clear "timed out" message rather than crashing — so the issue gets a useful comment instead of a bare workflow failure. The agent's step limit (`steps: 50`) is the other bound.
    - Parse the decision: the happy path is the default. If an `IMPLEMENTATION_BLOCKER:` line is present, the decision is `BLOCKED` and the blocker text is written to a file. Otherwise the decision is `IMPLEMENT`; the `IMPLEMENTATION_REASONING:` text is required and written to a file — the reasoning is a core part of the adversarial approach, so its absence is a genuine failure, not something to paper over.
-7. Cleanup: remove `.opencode/agents/probe-issue.md` and `.opencode/tools/run_tox.ts` so they do not appear as changed paths.
+7. Cleanup: remove `.opencode/agents/probe-issue.md` and `.opencode/tools/run_tox.ts` and `.opencode/tools/fetch_url.ts` so they do not appear as changed paths.
 8. If `BLOCKED`: comment on the issue with the blocker reason. Done.
 9. If `IMPLEMENT`: enforce changed paths (inline bash in the YAML, not a Python file the agent could tamper with).
    - Collect: `git diff --name-only` against the default branch, plus `git ls-files --others --exclude-standard` for untracked files.
@@ -141,9 +143,9 @@ Git hooks disabled: `core.hooksPath /dev/null` before the agent runs.
 
 Untrusted content as data: issue body, comments, and fetched docs wrapped in `<untrusted-content>` markers with explicit system constraints.
 
-Doc-fetch allowlist: only `canonical.com`, `ubuntu.com`, `raw.githubusercontent.com`, `github.com`. Max 5 URLs, 64KB each. Prevents SSRF from untrusted issue content.
+Doc-fetch allowlist: only `canonical.com`, `ubuntu.com`, `raw.githubusercontent.com`, `github.com`. Max 5 URLs, 64KB each. Prevents SSRF from untrusted issue content. The same allowlist is enforced by the `fetch_url` custom tool for on-demand fetching by the agent.
 
-Agent staging and cleanup: agent definition and tool file copied to `.opencode/` before the run, removed before diff collection.
+Agent staging and cleanup: agent definition and tool files copied to `.opencode/` before the run, removed before diff collection.
 
 Manual dispatch only: no automatic triggers. The user explicitly chooses to run this.
 
@@ -184,6 +186,21 @@ The agent calls the tool on demand to validate its work: write code, call `run_t
 
 `tox -e integration` is never run by this workflow. Integration tests require a Juju controller and are slow; they run in the per-charm CI workflows (`kepler.yaml`, etc.) automatically when the PR is created or updated.
 
+## The fetch_url tool
+
+The agent has a `fetch_url` custom tool (defined in `.github/tools/fetch_url.ts`) that fetches content from allowlisted domains. The tool is staged into `.opencode/tools/` before the agent runs and removed after, so it does not appear as a changed path.
+
+The tool takes a single argument: a URL. It validates the URL's host against a fixed allowlist (`canonical.com`, `ubuntu.com`, `raw.githubusercontent.com`, `github.com` — subdomains allowed), then performs a GET request and returns the response body as text (truncated to 64KB). The agent cannot fetch from arbitrary domains, POST data, or set custom headers beyond a User-Agent.
+
+This gives the agent on-demand access to charm development docs, library source code on GitHub, release notes, and PRs — without opening up unrestricted web access. The allowlist matches the one used by `probe_issue.py`'s server-side doc fetching, so the agent can fetch the same content at runtime that the workflow fetches at compose time.
+
+Security properties:
+- **Allowlisted domains only.** The agent cannot fetch from arbitrary hosts (no SSRF, no exfiltration to attacker-controlled servers).
+- **GET only.** The agent cannot POST data (no writing secrets to a GitHub gist or external service).
+- **64KB limit.** Prevents downloading large payloads.
+- **No secrets in headers.** Only a User-Agent string is sent. The `OPENROUTER_API_KEY` is not in the fetch headers.
+- **Custom tool, not built-in `web`.** The `web: deny` permission blocks OpenCode's built-in `WebFetch` tool, which has no domain restriction. The `fetch_url` custom tool enforces the allowlist in TypeScript code the agent cannot modify.
+
 ## CI on the PR
 
 The per-charm CI workflows (`kepler.yaml`, `kosmos.yaml`, `meteor.yaml`, `micron.yaml`) trigger on `pull_request` activity types `opened`, `synchronize`, and `reopened`. The probe-issue workflow creates the PR as a non-draft PR (`gh pr create` without `--draft`). Since the PR is created by a GitHub Actions workflow using `GITHUB_TOKEN`, GitHub requires approval before running CI workflows triggered by the PR — this provides the human review gate without needing draft mode.
@@ -192,7 +209,7 @@ The per-charm CI runs `tox -e unit` (which executes the agent's test code) and `
 
 ## Remaining risks
 
-Agent reads committed secrets (e.g., a `.env` file in the repo): low. Cannot exfiltrate without bash or network. Don't commit secrets.
+Agent reads committed secrets (e.g., a `.env` file in the repo): low. Cannot exfiltrate via `bash` (denied). The `fetch_url` tool only allows GET requests to allowlisted domains, so the agent cannot POST secret data to an external service. It could theoretically embed secret data in a URL path to an allowlisted domain (e.g. `github.com/<user>/<repo>/issues/<secret>`), but this would be visible in GitHub logs and the allowlisted domains are all Canonical/GitHub infrastructure. Don't commit secrets.
 
 Agent makes subtle malicious changes (e.g., typosquat a dependency in `pyproject.toml`): medium. Mitigated by human PR review and dependency scanning. The `uv lock` step in the container regenerates the lockfile, but a malicious package in `pyproject.toml` would still be installed inside the container (without secrets). On the runner, the malicious package would execute with the runner's environment — but GitHub requires approval before running workflows on PRs created by `GITHUB_TOKEN`, providing a human review gate.
 
