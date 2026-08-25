@@ -30,8 +30,8 @@ from urllib.parse import urlparse
 
 ALLOWED_DOMAINS = frozenset(
     {
-        "documentation.ubuntu.com",
-        "discourse.ubuntu.com",
+        "canonical.com",
+        "ubuntu.com",
         "raw.githubusercontent.com",
         "github.com",
     }
@@ -64,16 +64,23 @@ def load_issue_context(path: Path) -> str:
 # ---------------------------------------------------------------------------
 
 
+def host_allowed(host: str) -> bool:
+    """Return whether *host* is an allowlisted domain or a subdomain of one."""
+    return any(
+        host == domain or host.endswith("." + domain) for domain in ALLOWED_DOMAINS
+    )
+
+
 def extract_urls(text: str) -> list[str]:
     """Extract HTTP(S) URLs from text, limited to allowlisted domains."""
-    urls = re.findall(r"https?://[^\s<>\")\]]+", text)
+    urls = re.findall(r'https?://[^\s<>")\]]+', text)
     result: list[str] = []
     seen: set[str] = set()
     for url in urls:
         # Strip trailing punctuation.
         url = url.rstrip(".,;:")
         host = urlparse(url).hostname or ""
-        if host not in ALLOWED_DOMAINS:
+        if not host_allowed(host):
             continue
         if url in seen:
             continue
@@ -87,7 +94,7 @@ def extract_urls(text: str) -> list[str]:
 def fetch_doc(url: str) -> str:
     """Fetch a document from an allowlisted URL, bounded to MAX_DOC_BYTES."""
     host = urlparse(url).hostname or ""
-    if host not in ALLOWED_DOMAINS:
+    if not host_allowed(host):
         return ""
     try:
         req = urllib.request.Request(

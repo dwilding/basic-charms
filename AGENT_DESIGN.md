@@ -36,7 +36,9 @@ permission:
 ```
 
 The agent can read and edit files, and call the `run_tox` custom tool. Nothing else. It cannot run shell commands, reach the network, or delegate. `bash: deny` is the single most important control: every critical escape vector (direct push, git hooks, `/proc` env access, network exfiltration, background processes, git config manipulation, package installation, git filter injection) requires command execution. With `bash: deny` the agent's only output is file changes in the working tree, which are fully visible to enforcement and human review.
-
+# Retain INFO logs in the "Captured log call" section when run interactively.
+# Otherwise, that section will have DEBUG logs (coming from log_file_level).
+log_level = "INFO
 The `run_tox` tool is the exception: it lets the agent trigger tox inside an isolated Docker container. The tool runs a fixed script (`run_tox_in_container.py`) that the agent cannot modify; the only input the agent controls is the charm name (validated against a fixed list). The container has no secrets and no `.git/` access, so even if the agent injected malicious commands into `tox.ini` or test files, they cannot escape. See "The run_tox tool" below.
 
 ## Workflow flow
@@ -48,7 +50,7 @@ The `run_tox` tool is the exception: it lets the agent trigger tox inside an iso
 5. Prepare issue context: fetch the issue via `gh issue view` (title, body, comments) and write it to a markdown file.
 6. Run `probe_issue.py`:
    - Read the issue context file.
-   - Extract URLs from the issue and fetch linked documentation. Domain-allowlisted: `documentation.ubuntu.com`, `discourse.ubuntu.com`, `raw.githubusercontent.com`, `github.com`. Max 5 URLs, 64KB each.
+   - Extract URLs from the issue and fetch linked documentation. Domain-allowlisted: `canonical.com`, `ubuntu.com`, `raw.githubusercontent.com`, `github.com`. Max 5 URLs, 64KB each.
    - Compose the prompt: system constraints, runtime context, task instructions, untrusted content (delimited), output contract.
    - Stage the agent and tool: copy `.github/agent/probe-issue.md` to `.opencode/agents/` and `.github/tools/run_tox.ts` to `.opencode/tools/`.
    - Run OpenCode with `--auto` (auto-approve permissions not explicitly denied) and a scrubbed environment: `PATH`, `HOME`, `USER`, `SHELL`, `LANG`, `OPENROUTER_API_KEY` only. No `GITHUB_TOKEN`, no `ACTIONS_ID_TOKEN_*`. `--auto` is required because the agent runs non-interactively — without it, tools that default to `"ask"` (like `glob`, `grep`, `list`) would prompt for approval and hang forever. Explicit `deny` rules (`bash`, `network`, `web`, `task`) are still enforced. The run is bounded by a 20-minute wall-clock timeout (1200s). If OpenCode exceeds it, the script converts the timeout into a `BLOCKED` decision with a clear "timed out" message rather than crashing — so the issue gets a useful comment instead of a bare workflow failure. The agent's step limit (`steps: 100`) is the other bound.
@@ -138,7 +140,7 @@ Git hooks disabled: `core.hooksPath /dev/null` before the agent runs.
 
 Untrusted content as data: issue body, comments, and fetched docs wrapped in `<untrusted-content>` markers with explicit system constraints.
 
-Doc-fetch allowlist: only `documentation.ubuntu.com`, `discourse.ubuntu.com`, `raw.githubusercontent.com`, `github.com`. Max 5 URLs, 64KB each. Prevents SSRF from untrusted issue content.
+Doc-fetch allowlist: only `canonical.com`, `ubuntu.com`, `raw.githubusercontent.com`, `github.com`. Max 5 URLs, 64KB each. Prevents SSRF from untrusted issue content.
 
 Agent staging and cleanup: agent definition and tool file copied to `.opencode/` before the run, removed before diff collection.
 
