@@ -2,7 +2,7 @@ name: micron
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened]
     paths:
       - .github/workflows/micron.yaml
       - micron/**
@@ -13,11 +13,6 @@ permissions: {}
 jobs:
   pack-and-test:
     runs-on: ubuntu-latest
-    # Skip CI while the PR is a draft. CI runs when the PR is marked
-    # ready for review.
-    if: |
-      github.event_name != 'pull_request' ||
-      !github.event.pull_request.draft
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1

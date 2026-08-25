@@ -195,7 +195,7 @@ and tested. The lockfile change is included in the PR automatically.
 
 `run_tox` runs `tox -e format,lint,unit` only — not integration tests. \
 Integration tests require a Juju controller and a packed `.charm` file. They \
-run in per-charm CI after the PR is marked ready for review. You can write \
+run in per-charm CI automatically when the PR is created. You can write \
 integration tests and validate that they import and type-check via `run_tox` \
 (lint runs pyright), but you cannot run them yourself. Write the test, \
 validate with `run_tox`, and let CI confirm or refute.
@@ -404,8 +404,7 @@ standard copyright header and a module docstring. If you add or change a \
 dependency in pyproject.toml, run_tox will uv lock and install it — make \
 sure the version spec is valid.
 9. After you exit, the workflow enforces the path allowlist and creates the \
-PR as a draft. CI checks don't run until the reviewer marks the PR ready for \
-review.
+PR. CI runs after the reviewer approves the workflow runs.
 
 ### Version-dependent claims
 

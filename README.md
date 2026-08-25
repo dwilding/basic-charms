@@ -8,7 +8,7 @@ To perform an adversarial test:
 
 3. Run the [Probe issue](https://github.com/dwilding/basic-charms/actions/workflows/probe-issue.yaml) workflow, entering the issue number in the **Run workflow** UI.
 
-4. Wait for a draft PR to be created.
+4. Wait for a PR to be created.
 
     The PR will modify one or more of the basic charms (and possibly their unit tests or integration tests) to test the documentation claim you described in the issue.
 
@@ -22,7 +22,7 @@ To perform an adversarial test:
 
     > I believe `<claim>` is true. I added a test asserting it, which is expected to pass. If CI passes, the doc is correct.
 
-5. Review the PR to make sure the agent's changes are meaningful and trustworthy. Then mark the PR ready for review to run the CI checks.
+5. Review the PR to make sure the agent's changes are meaningful and trustworthy. Once you're satisfied, approve the PR's workflow runs to trigger CI.
 
 6. After the CI checks have completed, use the PR description to draw a conclusion about the documentation.
 
