@@ -64,7 +64,7 @@ The `run_tox` tool is the exception: it lets the agent trigger tox inside an iso
    - Verify `.git/` was not modified (checks `git diff` and `git ls-files` for `.git/` paths). Reject if any `.git/` files were changed — this prevents the agent from planting hooks that would fire during `git add` or `git push`.
 10. Configure git credentials using `GITHUB_TOKEN` — only now, after enforcement passes and the agent has exited.
 11. `git add --all`, commit, push branch `probe/issue-<n>`.
-12. `gh pr create --draft` with title `verify: <first line of reasoning>`, the agent's reasoning file as the PR body. The body does not include `Closes #<n>`. The PR is created as a draft so CI doesn't run automatically. Comment on the PR telling the reviewer to mark it ready for review to run CI.
+12. `gh pr create` with title `verify: <first line of reasoning>`, the agent's reasoning file as the PR body. The body does not include `Closes #<n>`. GitHub requires approval before running CI workflows on PRs created by `GITHUB_TOKEN`.
 13. Comment on the issue with the result (PR link, blocker, or failure message). This step always runs.
 
 ## Prompt composition
@@ -182,19 +182,19 @@ Even if the agent injected malicious commands into `tox.ini`, `pyproject.toml`, 
 
 The agent calls the tool on demand to validate its work: write code, call `run_tox`, see the output, fix issues, call again. This happens within the single agent session — no separate fix sessions are needed. After the agent exits, the workflow enforces the path allowlist and creates the PR.
 
-`tox -e integration` is never run by this workflow. Integration tests require a Juju controller and are slow; they run in the per-charm CI workflows (`kepler.yaml`, etc.) after the PR is marked ready for review.
+`tox -e integration` is never run by this workflow. Integration tests require a Juju controller and are slow; they run in the per-charm CI workflows (`kepler.yaml`, etc.) automatically when the PR is created or updated.
 
-## CI gating on the PR
+## CI on the PR
 
-The per-charm CI workflows (`kepler.yaml`, `kosmos.yaml`, `meteor.yaml`, `micron.yaml`) trigger on `pull_request` activity types `opened`, `synchronize`, `reopened`, and `ready_for_review`. The job has a condition that skips if the PR is a draft (`if: !github.event.pull_request.draft`). The probe-issue workflow creates the PR as a draft (`gh pr create --draft`), so CI doesn't run when the PR is first created. The reviewer inspects the changes, then marks the PR as ready for review — this triggers the `ready_for_review` event, which runs CI.
+The per-charm CI workflows (`kepler.yaml`, `kosmos.yaml`, `meteor.yaml`, `micron.yaml`) trigger on `pull_request` activity types `opened`, `synchronize`, and `reopened`. The probe-issue workflow creates the PR as a non-draft PR (`gh pr create` without `--draft`). Since the PR is created by a GitHub Actions workflow using `GITHUB_TOKEN`, GitHub requires approval before running CI workflows triggered by the PR — this provides the human review gate without needing draft mode.
 
-This is necessary because the per-charm CI runs `tox -e unit` (which executes the agent's test code) and `tox -e integration` (which deploys the charm). The `run_tox` tool runs inside a container, but the per-charm CI runs on the runner directly. The draft gate ensures a human reviews the code before it executes outside the container.
+The per-charm CI runs `tox -e unit` (which executes the agent's test code) and `tox -e integration` (which deploys the charm). The `run_tox` tool runs inside a container, but the per-charm CI runs on the runner directly. Since the PR is created by a GitHub Actions workflow using `GITHUB_TOKEN`, GitHub requires approval before running workflows triggered by the PR — this provides the human review gate without needing draft mode.
 
 ## Remaining risks
 
 Agent reads committed secrets (e.g., a `.env` file in the repo): low. Cannot exfiltrate without bash or network. Don't commit secrets.
 
-Agent makes subtle malicious changes (e.g., typosquat a dependency in `pyproject.toml`): medium. Mitigated by human PR review and dependency scanning. The `uv lock` step in the container regenerates the lockfile, but a malicious package in `pyproject.toml` would still be installed inside the container (without secrets). On the runner (after the PR is marked ready for review), the malicious package would execute with the runner's environment — but the reviewer inspects the PR before marking it ready.
+Agent makes subtle malicious changes (e.g., typosquat a dependency in `pyproject.toml`): medium. Mitigated by human PR review and dependency scanning. The `uv lock` step in the container regenerates the lockfile, but a malicious package in `pyproject.toml` would still be installed inside the container (without secrets). On the runner, the malicious package would execute with the runner's environment — but GitHub requires approval before running workflows on PRs created by `GITHUB_TOKEN`, providing a human review gate.
 
 Prompt injection from issue or docs content: low-medium. Mitigated by `<untrusted-content>` delimiters and system constraints. The agent can only edit files, which are reviewed.
 

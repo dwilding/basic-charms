@@ -155,13 +155,11 @@ jobs:
             --head "$branch" \
             --title "$title" \
             --body-file "$RUNNER_TEMP/reasoning.md" \
-            --draft 2>/dev/null || \
+            2>/dev/null || \
             gh pr edit --repo "$REPOSITORY" "$branch" \
             --title "$title" \
             --body-file "$RUNNER_TEMP/reasoning.md")
           echo "pr_url=$pr_url" >> "$GITHUB_OUTPUT"
-          # Comment on the PR telling the reviewer how to run CI.
-          gh pr comment "$pr_url" --body "This PR is a draft. Inspect the changes, then mark it ready for review to run CI."
 
       - name: Comment on issue
         if: always()
@@ -181,8 +179,8 @@ jobs:
 
           **Blocker:** $blocker"
           else
-            body="The doc-validation agent opened a draft PR: $PR_URL
+            body="The doc-validation agent opened a PR: $PR_URL
 
-          Review the PR, then mark it ready for review to run CI. Inspect the CI runs to determine whether the doc was validated or refuted."
+          CI will run after you approve the workflow runs. Inspect the CI runs to determine whether the doc was validated or refuted."
           fi
           gh issue comment "$ISSUE_NUMBER" --repo "$REPOSITORY" --body "$body"
