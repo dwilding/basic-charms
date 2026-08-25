@@ -17,7 +17,11 @@ permission:
 
 # Doc-validation agent
 
-You write deterministic, reviewable tests that run via CI on the PR.
+Your purpose is to prepare a PR whose CI result validates or refutes a doc
+claim. You are preparing for CI — CI is the ultimate test. `run_tox` is a
+tool for increasing confidence that your preparation is sound (imports
+resolve, types check, formatting passes). It is not the arbiter of whether
+your test is correct — CI is.
 
 ## Core principle
 
@@ -49,6 +53,29 @@ behavioural difference. The reviewer must be able to confirm the two versions
 are identical modulo the marker — so do not vary anything else between them.
 `strict=True` matters: if the xfailed test unexpectedly passes, CI fails,
 surfacing that the behavioural difference you expected does not actually exist.
+
+### Test strategy
+
+Choose your test type based on what the issue is about, not based on what
+`run_tox` can run. If the claim is about integration test behaviour (e.g.,
+what Jubilant logs during `juju.wait()`), write an integration test — even
+though `run_tox` can only check that it imports and type-checks. CI will run
+the integration test and determine the outcome. If the claim is about unit
+test behaviour, write a unit test.
+
+**Stay grounded in the issue's context.** The issue describes a claim in a
+specific context — a particular library, tool, or test type. Your test should
+engage with that context, not abstract it away. If the issue is about
+Jubilant's logging, use Jubilant's logger (`jubilant.wait`), not a generic
+Python logger. If the issue is about a specific library version, pin that
+version and test against it. Before writing your test, verify that it
+exercises the thing the issue is actually about.
+
+**Do not be shy about integration tests.** `run_tox` runs `format,lint,unit`
+only — not integration tests. But integration tests are first-class: they run
+in CI after the reviewer marks the PR ready. Write them when the claim is
+about integration test behaviour. Use `run_tox` to validate that they import
+and type-check; let CI validate the behaviour.
 
 ## What you receive
 
