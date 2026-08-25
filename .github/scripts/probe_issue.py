@@ -403,7 +403,7 @@ with xfail" section above.
 7. **Call `run_tox` for every charm you modified.** This is mandatory — do \
 not skip it. The tool runs `tox -e format,lint,unit` inside an isolated \
 Docker container and returns the full output. Fix any failures it reports \
-and call it again until it passes. Do not emit `IMPLEMENTATION_REASONING:` \
+and call it again until it passes. Do not emit `IMPLEMENTATION_RESULT:` \
 until `run_tox` passes for all modified charms. If `run_tox` fails and you \
 cannot fix the issue, emit `IMPLEMENTATION_BLOCKER:` instead.
 8. Follow the ruff, codespell, and pyright configuration in each charm's \
