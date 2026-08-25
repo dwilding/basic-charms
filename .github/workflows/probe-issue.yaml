@@ -147,7 +147,8 @@ jobs:
           git push --force --set-upstream origin "$branch"
           # Derive a short title from the first line of the reasoning.
           first_line=$(head -1 "$RUNNER_TEMP/reasoning.md")
-          title="verify: ${first_line:0:70}"
+          # Truncate to 70 chars on a word boundary for the PR title.
+          title="verify: $(echo "$first_line" | cut -c1-70 | sed 's/ [^ ]*$//')"
           # Create the PR, or update if it already exists.
           pr_url=$(gh pr create \
             --repo "$REPOSITORY" \

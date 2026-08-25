@@ -355,7 +355,13 @@ URLs yourself (you do not have web access).
 micron/, and libs/. Limit your initial exploration to at most 10 files. Do \
 not read AGENT_DESIGN.md, README.md, or files under .github/ or .opencode/ — \
 those are workflow infrastructure, not charm code.
-3. Identify a specific claim in the documentation that can be tested.
+3. Enumerate the testable claims in the documentation. Label them A, B, C, \
+etc. For example, a doc might make claim A ("X happens by default") and \
+claim B ("X does not happen with option Y"). The issue may reference \
+some or all of these claims, or raise new ones. Decide which claim(s) to test \
+and state your reasoning for the choice. If the issue hints at a version \
+dependency (e.g., "maybe there's a difference with the latest version"), \
+treat that as a separate claim to enumerate.
 4. Write a test that asserts your understanding — aiming for passing CI. Do \
 NOT write a test that merely echoes the documented behaviour without \
 independent reasoning; that is not adversarial. For example, if the docs \
@@ -405,20 +411,25 @@ workflow parses for this exact string at the start of a line. Without it, the \
 run fails even if you made all the right changes.
 
 **After `run_tox` passes for all modified charms, end your output with a line \
-that starts with `IMPLEMENTATION_REASONING:` followed by your reasoning.** For \
-example:
+that starts with `IMPLEMENTATION_REASONING:` followed by your reasoning.** \
+The first line of your reasoning becomes the PR title (prefixed with \
+"verify: "), so start with a concise summary — one sentence that captures \
+what you believe and what the test checks. Then continue with the full \
+reasoning on subsequent lines. For example:
 
 ```
-IMPLEMENTATION_REASONING: I believe the doc is wrong about <claim>. I added a \
-test asserting <what I believe is true>, which is expected to pass. If CI \
-passes, the doc is incorrect.
+IMPLEMENTATION_REASONING: log_level=INFO does not affect Jubilant's captured logs when log_cli_level is already INFO
+
+The doc claims A: ... and B: ... I believe ... I added a test asserting ...
+If CI passes, ... If CI fails, ...
 ```
 
 The reasoning is a core part of the adversarial approach: the reviewer needs it \
-to interpret the CI results. State what the doc claims, what you believe is \
-true, what the PR tests, and what green (or red) CI means for the doc. Write \
-it in plain conversational English (see Voice below). Do not use markdown \
-headers or formatting — just plain text after the marker.
+to interpret the CI results. Enumerate the claims you identified (A, B, C), \
+state which you tested and why, what you believe is true, what the PR tests, \
+and what green (or red) CI means for each claim. Write it in plain \
+conversational English (see Voice below). Do not use markdown headers or \
+formatting — just plain text after the marker.
 
 If `run_tox` fails and you cannot fix the issue, emit \
 `IMPLEMENTATION_BLOCKER: <maintainer-actionable reason>` instead. Do not \
