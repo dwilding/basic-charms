@@ -9,10 +9,14 @@ description: |
 
 # Documentation:
 # https://documentation.ubuntu.com/charmcraft/stable/howto/build-guides/select-platforms/
-base: ubuntu@24.04
-platforms:
-  amd64:
-  arm64:
+# NOTE: This charm deliberately uses the deprecated `bases:` key (instead of the
+# preferred `base` + `platforms`) to probe whether Charmcraft 4 still packs it.
+bases:
+  - name: ubuntu
+    channel: '24.04'
+    architectures:
+      - amd64
+      - arm64
 
 assumes:
   - juju >= 3.6
