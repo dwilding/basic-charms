@@ -39,3 +39,17 @@ def test_deploy(charm: pathlib.Path, juju: jubilant.Juju):
     }
     juju.deploy(charm, app=APP_NAME, resources=resources)
     juju.wait(jubilant.all_active)
+
+
+@pytest.mark.xfail(strict=True, reason="without log_level=INFO, DEBUG logs are captured")
+def test_log_level_filters_debug_from_captured_logs(
+    juju: jubilant.Juju,
+    caplog: pytest.LogCaptureFixture,
+):
+    """With log_level=INFO, captured logs retain INFO but filter out DEBUG."""
+    juju.wait(jubilant.all_active)
+    wait_records = [r for r in caplog.records if r.name == "jubilant.wait"]
+    # Jubilant 1.12.0 logs app/unit status changes at INFO on the first poll.
+    assert any(r.levelno == logging.INFO for r in wait_records)
+    # The verbose gron diff is logged at DEBUG; log_level=INFO filters it out.
+    assert not any(r.levelno == logging.DEBUG for r in wait_records)
