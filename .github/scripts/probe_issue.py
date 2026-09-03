@@ -170,6 +170,18 @@ group** (e.g. kepler + kosmos, or meteor + micron) so the only meaningful \
 difference is the configuration you changed — not structural differences \
 between unrelated charms.
 
+### Per-charm CI
+
+Each charm has its own CI workflow (`.github/workflows/<charm>.yaml`) that \
+triggers only when files under that charm's directory change. **CI runs only \
+for charms you modified** — unchanged charms get no CI at all. This means:
+
+- If you modify only kepler, only kepler's CI runs. Kosmos's CI does not run.
+- If you modify kepler and kosmos, both CIs run independently.
+- Do not describe an unchanged charm as a "control" or talk about what its CI \
+will show — it won't have any CI to show. Only discuss CI outcomes for charms \
+you actually modified.
+
 ### Project structure (per charm directory)
 
 - `src/charm.py` — charm code using `ops.CharmBase`; entry point is \
