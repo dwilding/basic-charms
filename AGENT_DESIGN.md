@@ -78,7 +78,7 @@ Six sections, composed by the Python script:
 3. Charm development context: project structure, dependency management (including how to pin versions via `pyproject.toml` and `run_tox`'s `uv lock`), `run_tox` scope, unit test patterns (including sequence testing), integration test patterns, and linting conventions. This gives the agent the toolchain knowledge it needs without having to reverse-engineer it by reading files.
 4. Task instructions: the adversarial testing strategy (see below), including event sequence and observable guidance, differential testing with xfail, version-dependent claims, and step-by-step instructions.
 5. Untrusted content: issue title, body, comments, fetched docs, all wrapped in `<untrusted-content>` markers.
-6. Output contract: the happy path is the default — if the agent makes file changes and writes `.PR.md`, the workflow treats that as `IMPLEMENT` and creates the PR. No marker is needed for the happy path. The agent only emits `IMPLEMENTATION_BLOCKER: <reason>` in its stdout when it cannot proceed. When implementing, the agent writes a `.PR.md` file — a markdown document where the first `# ` heading is the PR title (max 70 chars) and the rest is the PR body in plain conversational English (see Voice below). The reasoning is a core part of the adversarial approach: the reviewer needs it to interpret the CI results, so the workflow fails the run if `.PR.md` is absent rather than opening a PR with a placeholder body.
+6. Output contract: the happy path is the default — if the agent makes file changes and writes `.PR.md`, the workflow treats that as `IMPLEMENT` and creates the PR. No marker is needed for the happy path. The agent only emits `IMPLEMENTATION_BLOCKER: <reason>` in its stdout when it cannot proceed. When implementing, the agent writes a `.PR.md` file — a markdown document where the first `# ` heading is the PR title (max 100 chars) and the rest is the PR body in plain conversational English (see Voice below). The reasoning is a core part of the adversarial approach: the reviewer needs it to interpret the CI results, so the workflow fails the run if `.PR.md` is absent rather than opening a PR with a placeholder body.
 
 The prompt is transported to OpenCode as a file (`--file prompt.md`), not as argv, to avoid OS argument length limits with large issue or docs content.
 
@@ -124,6 +124,8 @@ The PR body must contain the chain of reasoning so a reviewer can interpret the 
 > The doc at `<url>` claims: `<claim>`. I believe `<claim>` is true, so I added a test asserting it, which is expected to pass. If CI passes, the doc is correct.
 
 The reviewer inspects CI to determine the actual outcome. The PR body does not include `Closes #<n>` — the PR is not meant to merge, and the issue should not auto-close.
+
+The agent must never hard-wrap lines in `.PR.md`. Each paragraph should be a single long line — the markdown renderer handles wrapping. Hard-wrapped lines look sloppy in the rendered PR and signal carelessness.
 
 ## Voice
 
@@ -215,9 +217,9 @@ Security properties:
 
 ## CI on the PR
 
-The per-charm CI workflows (`kepler.yaml`, `kosmos.yaml`, `meteor.yaml`, `micron.yaml`) trigger on `pull_request` activity types `opened`, `synchronize`, and `reopened`. The probe-issue workflow creates the PR as a non-draft PR (`gh pr create` without `--draft`). Since the PR is created by a GitHub Actions workflow using `GITHUB_TOKEN`, GitHub requires approval before running CI workflows triggered by the PR — this provides the human review gate without needing draft mode.
+The per-charm CI workflows (`kepler.yaml`, `kosmos.yaml`, `meteor.yaml`, `micron.yaml`) trigger on `pull_request` activity types `opened`, `synchronize`, and `reopened`, but only when files under that charm's directory change. **CI runs only for charms the agent modified** — unchanged charms get no CI at all. The probe-issue workflow creates the PR as a non-draft PR (`gh pr create` without `--draft`). Since the PR is created by a GitHub Actions workflow using `GITHUB_TOKEN`, GitHub requires approval before running CI workflows triggered by the PR — this provides the human review gate without needing draft mode.
 
-The per-charm CI runs `tox -e unit` (which executes the agent's test code) and `tox -e integration` (which deploys the charm). The `run_tox` tool runs inside a container, but the per-charm CI runs on the runner directly. Since the PR is created by a GitHub Actions workflow using `GITHUB_TOKEN`, GitHub requires approval before running workflows triggered by the PR — this provides the human review gate without needing draft mode.
+The per-charm CI runs `tox -e unit` (which executes the agent's test code) and `tox -e integration` (which deploys the charm). The `run_tox` tool runs inside a container, but the per-charm CI runs on the runner directly.
 
 ## Remaining risks
 
