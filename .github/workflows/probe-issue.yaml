@@ -1,6 +1,8 @@
 name: Probe issue
 
 on:
+  issues:
+    types: [opened]
   workflow_dispatch:
     inputs:
       issue_number:
@@ -14,14 +16,15 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: probe-issue-${{ github.event.inputs.issue_number }}
+  group: probe-issue-${{ github.event.issue.number || github.event.inputs.issue_number }}
   cancel-in-progress: false
 
 jobs:
   probe:
     runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.issue != null
     env:
-      ISSUE_NUMBER: ${{ github.event.inputs.issue_number }}
+      ISSUE_NUMBER: ${{ github.event.issue.number || github.event.inputs.issue_number }}
       OPENCODE_VERSION: '1.18.16'
     steps:
       - name: Checkout

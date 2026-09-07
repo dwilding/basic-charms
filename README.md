@@ -6,9 +6,9 @@ To perform an adversarial test:
 
 2. Create an issue in `basic-charms` with a link to the documentation page and a description of the claim you want to test. This could be a quote from the page or an explanation of something the page implies.
 
-3. Run the [Probe issue](https://github.com/dwilding/basic-charms/actions/workflows/probe-issue.yaml) workflow, entering the issue number in the **Run workflow** UI.
+    The [Probe issue](https://github.com/dwilding/basic-charms/actions/workflows/probe-issue.yaml) workflow runs automatically when an issue is opened. You can also trigger it manually from the Actions page (enter the issue number in the **Run workflow** UI) to re-run the probe on an existing issue.
 
-4. Wait for a PR to be created.
+3. Wait for a PR to be created.
 
     The PR will modify one or more of the basic charms (and possibly their unit tests or integration tests) to test the documentation claim you described in the issue.
 
@@ -22,11 +22,11 @@ To perform an adversarial test:
 
     > I believe `<claim>` is true. I added a test asserting it, which is expected to pass. If CI passes, the doc is correct.
 
-5. Review the PR to make sure the agent's changes are meaningful and trustworthy. Once you're satisfied, approve the PR's workflow runs to trigger CI.
+4. Review the PR to make sure the agent's changes are meaningful and trustworthy. Once you're satisfied, approve the PR's workflow runs to trigger CI.
 
-6. After the CI checks have completed, use the PR description to draw a conclusion about the documentation.
+5. After the CI checks have completed, use the PR description to draw a conclusion about the documentation.
 
-7. Decide how to fix the documentation — if needed.
+6. Decide how to fix the documentation — if needed.
 
 The agentic workflow that creates the PR is explained in [AGENT_DESIGN.md](AGENT_DESIGN.md). It's a **highly experimental** workflow based on ideas explored in [SecondSkoll/generic-agentic-workflows](https://github.com/SecondSkoll/generic-agentic-workflows). It uses OpenCode, OpenRouter, and GLM-5.2.
 
