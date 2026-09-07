@@ -31,6 +31,7 @@ class KosmosCharm(ops.CharmBase):
         super().__init__(framework)
         self.pebble_service_name = "fastapi-service"
         framework.observe(self.on["demo-server"].pebble_ready, self._on_demo_server_pebble_ready)
+        framework.observe(self.on.config_changed, self._on_config_changed)
 
     def _on_demo_server_pebble_ready(self, event: ops.PebbleReadyEvent) -> None:
         """Define and start a workload using the Pebble API."""
@@ -40,9 +41,18 @@ class KosmosCharm(ops.CharmBase):
         container.add_layer("fastapi_demo", self._get_pebble_layer(), combine=True)
         # Make Pebble reevaluate its plan, ensuring any services are started if enabled.
         container.replan()
-        # Learn more about statuses at
-        # https://documentation.ubuntu.com/juju/3.6/reference/status/
-        self.unit.status = ops.ActiveStatus()
+        # Reflect the current config in the unit status so that a config-changed
+        # event on this unit is observable via `juju status`.
+        self._update_status()
+
+    def _on_config_changed(self, event: ops.ConfigChangedEvent) -> None:
+        """Update the unit status to reflect the current log-level config."""
+        self._update_status()
+
+    def _update_status(self) -> None:
+        """Set the unit status to an active status reporting the log-level config."""
+        log_level = self.config.get("log-level", "info")
+        self.unit.status = ops.ActiveStatus(f"log-level={log_level}")
 
     def _get_pebble_layer(self) -> ops.pebble.Layer:
         """Pebble layer for the FastAPI demo services."""
