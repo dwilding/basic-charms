@@ -408,6 +408,19 @@ in both. When doing so, pick two charms from the same group (k- charms: \
 kepler + kosmos; m- charms: meteor + micron) so the only meaningful \
 difference is the configuration you changed.
 
+**Choose observables that survive the full event sequence.** When your \
+test observes a side effect of an event handler (e.g. a status message, a \
+log record, a stored value), trace what happens *after* the event you are \
+testing. In charm frameworks, one event often triggers others — a config \
+change can re-fire `pebble-ready`, a relation change can trigger \
+`config-changed`, and so on. If a later handler overwrites or clears your \
+observable, your test will fail for reasons unrelated to the claim. Before \
+finalizing your test, read every handler in the charm and ask: "will any \
+other handler fire after the one I'm testing, and will it clobber what I'm \
+observing?" If so, choose a different observable (e.g. `StoredState`, a \
+file in the container, `workload_version`) or adjust the handler so it \
+preserves the observable.
+
 ### Differential testing with xfail
 
 Sometimes a claim is best tested by showing that the SAME test behaves \
