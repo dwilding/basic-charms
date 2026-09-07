@@ -4,10 +4,11 @@ This script is dependency-free so it can run on a GitHub Actions runner. It:
 - Reads the issue context (title, body, comments) from a file written by the
   workflow.
 - Fetches linked documentation from allowlisted domains.
-- Composes a five-section prompt with the untrusted issue content delimited.
-- Stages the agent definition and the run_tox custom tool into .opencode/.
+- Composes a six-section prompt with the untrusted issue content delimited.
+- Stages the agent definition and custom tools into .opencode/.
 - Runs OpenCode with a scrubbed environment (no GITHUB_TOKEN).
-- Parses the decision (IMPLEMENT/BLOCKED) and reasoning.
+- Parses the decision (IMPLEMENT/BLOCKED) and reads .PR.md for the PR title
+  and body.
 - Writes the parsed fields to $GITHUB_OUTPUT.
 """
 
