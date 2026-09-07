@@ -6,7 +6,7 @@ To perform an adversarial test:
 
 2. Create an issue in `basic-charms` with a link to the documentation page and a description of the claim you want to test. This could be a quote from the page or an explanation of something the page implies.
 
-    The [Probe issue](https://github.com/dwilding/basic-charms/actions/workflows/probe-issue.yaml) workflow runs automatically when an issue is opened. You can also trigger it manually from the Actions page (enter the issue number in the **Run workflow** UI) to re-run the probe on an existing issue.
+    The [Probe issue](https://github.com/dwilding/basic-charms/actions/workflows/probe-issue.yaml) workflow runs automatically when an issue is opened.
 
 3. Wait for a PR to be created.
 
