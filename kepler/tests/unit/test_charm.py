@@ -44,10 +44,42 @@ def test_pebble_layer():
 
     # Check that we have the plan we expected:
     assert state_out.get_container(container.name).plan == expected_plan
-    # Check the unit is active:
-    assert state_out.unit_status == testing.ActiveStatus()
+    # Check the unit is active and reports the default log-level:
+    assert state_out.unit_status == testing.ActiveStatus("log-level=info")
     # Check the service was started:
     assert (
         state_out.get_container(container.name).service_statuses["fastapi-service"]
         == ops.pebble.ServiceStatus.ACTIVE
     )
+
+
+def test_config_changed_updates_status():
+    """A config-changed event updates the unit status to reflect the new log-level."""
+    ctx = testing.Context(KosmosCharm)
+    container = testing.Container(name="demo-server", can_connect=True)
+    state_in = testing.State(
+        containers={container},
+        leader=True,
+        config={"log-level": "debug"},
+    )
+    state_out = ctx.run(ctx.on.config_changed(), state_in)
+    assert state_out.unit_status == testing.ActiveStatus("log-level=debug")
+
+
+def test_config_changed_survives_pebble_ready():
+    """The status set by config-changed survives a subsequent pebble-ready event.
+
+    This mirrors the real event sequence on a unit: config-changed and pebble-ready
+    both fire during the initial deploy, and both handlers set the status from the
+    same config value, so the observable is preserved across the full sequence.
+    """
+    ctx = testing.Context(KosmosCharm)
+    container = testing.Container(name="demo-server", can_connect=True)
+    state = testing.State(
+        containers={container},
+        leader=True,
+        config={"log-level": "debug"},
+    )
+    state = ctx.run(ctx.on.config_changed(), state)
+    state = ctx.run(ctx.on.pebble_ready(container), state)
+    assert state.unit_status == testing.ActiveStatus("log-level=debug")
