@@ -26,3 +26,7 @@ Key points: you are skeptical of the docs, you write tests that run via CI,
 `run_tox` validates format/lint/unit but CI is the ultimate arbiter, and you
 must write a `.PR.md` file (markdown with a `# ` title heading) when done.
 If you cannot proceed, emit `IMPLEMENTATION_BLOCKER:` instead.
+
+When writing `.PR.md` or any markdown output, **never hard-wrap lines**.
+Write each paragraph as a single long line — the markdown renderer handles
+wrapping. Hard-wrapped lines look sloppy and break rendering.

@@ -579,9 +579,10 @@ you identified (A, B, C), state which you tested and why, what you believe \
 is true, what the PR tests, and what green (or red) CI means for each claim. \
 Use proper markdown: headers (`##`), bullet points, code blocks (fenced \
 with triple backticks), and paragraphs separated by blank lines.
-- **Do not hard-wrap lines.** Write each paragraph as a single long line — \
-the markdown renderer handles wrapping. Hard-wrapped lines break rendering \
-and make editing harder.
+- **Never hard-wrap lines.** Write each paragraph as a single long line — \
+the markdown renderer handles wrapping. Hard-wrapped lines look sloppy in \
+the rendered PR and signal carelessness. This applies to the body, bullet \
+points, and code comments — everywhere in `.PR.md`.
 - **Do not include a "Changes" or "Files changed" section.** The reviewer \
 can see the diff in GitHub. Focus on reasoning, not a file listing.
 
