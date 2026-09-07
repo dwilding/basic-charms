@@ -2,7 +2,7 @@
 
 ## Goal
 
-A manually dispatched GitHub Action in `basic-charms` that reads an issue describing public charm-dev documentation, writes tests that verify how things actually behave, and opens a PR. The agent is skeptical of the docs: it forms its own understanding of how the code behaves, writes a test asserting that understanding, and deduces what the CI result means for the doc. The user reviews the PR, inspects the CI results, and reads the agent's reasoning to determine whether the doc was validated or refuted. The PR is an artifact for review, not for merging.
+A GitHub Action in `basic-charms` that reads an issue describing public charm-dev documentation, writes tests that verify how things actually behave, and opens a PR. The agent is skeptical of the docs: it forms its own understanding of how the code behaves, writes a test asserting that understanding, and deduces what the CI result means for the doc. The user reviews the PR, inspects the CI results, and reads the agent's reasoning to determine whether the doc was validated or refuted. The PR is an artifact for review, not for merging.
 
 ## Files (all under `.github/`)
 
@@ -45,7 +45,7 @@ The `fetch_url` tool is the other exception: it lets the agent fetch content fro
 
 ## Workflow flow
 
-1. `workflow_dispatch` with `issue_number` (required).
+1. Triggered automatically when an issue is opened (`issues: [opened]`), or manually via `workflow_dispatch` with `issue_number` (required) to re-run on an existing issue.
 2. Checkout with `persist-credentials: false`, `fetch-depth: 0`. No git credentials in `.git/config` during the agent run.
 3. `git config core.hooksPath /dev/null` — defense in depth, inert hooks.
 4. Setup Node 24, install `opencode-ai` (version pinned in the `OPENCODE_VERSION` env var in the workflow), set up uv.
@@ -147,7 +147,7 @@ Doc-fetch allowlist: only `canonical.com`, `ubuntu.com`, `raw.githubusercontent.
 
 Agent staging and cleanup: agent definition and tool files copied to `.opencode/` before the run, removed before diff collection.
 
-Manual dispatch only: no automatic triggers. The user explicitly chooses to run this.
+Triggered automatically on issue open, or manually via `workflow_dispatch` to re-run on an existing issue.
 
 Repository setting: the repo must have "Allow GitHub Actions to create and approve pull requests" enabled (Settings → Actions → General → Workflow permissions). This is the gate that lets the `GITHUB_TOKEN` create PRs. The workflow declares `pull-requests: write` in its `permissions:` block, but that alone is not enough — the repo-level flag must also be on. The default workflow permission should remain `read` (least privilege); each workflow declares its own `permissions:` block.
 
@@ -223,7 +223,7 @@ OpenCode vulnerability allowing code execution despite `bash: deny`: low, outsid
 
 ## Dry-run mode (not implemented)
 
-The workflow has no dry-run mode. The workflow is manually dispatched (a human already chose to run it), the agent can return `BLOCKED` when it cannot proceed, and an unwanted PR is cheap to close and delete. A dry-run mode would add complexity across the input, env vars, conditional steps, and issue-comment branches for a mode whose main use is during initial development of the agent script.
+The workflow has no dry-run mode. The workflow is triggered automatically on issue open (or manually for re-runs), the agent can return `BLOCKED` when it cannot proceed, and an unwanted PR is cheap to close and delete. A dry-run mode would add complexity across the input, env vars, conditional steps, and issue-comment branches for a mode whose main use is during initial development of the agent script.
 
 If dry-run is wanted later, implement it as follows:
 
