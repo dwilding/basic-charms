@@ -253,6 +253,26 @@ on `state_out.unit_status`, `state_out.get_container(name).plan`, \
 `state_out.get_relations(endpoint)`, `ctx.juju_log`, \
 `ctx.unit_status_history`, `ctx.emitted_events`.
 
+**Sequence testing.** Chain `ctx.run()` calls to fire events in order, \
+passing each output state to the next. This lets you test that an \
+observable survives the full event sequence — not just the event you are \
+testing. For example, to verify that a status message set by \
+`config-changed` survives a subsequent `pebble-ready`:
+
+```python
+def test_config_changed_survives_pebble_ready():
+    ctx = testing.Context(MyCharm)
+    container = testing.Container(name='demo-server', can_connect=True)
+    state = testing.State(containers={container}, leader=True, config={'log-level': 'debug'})
+    state = ctx.run(ctx.on.config_changed(), state)
+    state = ctx.run(ctx.on.pebble_ready(container), state)
+    assert state.unit_status == testing.ActiveStatus('log-level=debug')
+```
+
+This is critical for integration tests that observe side effects of event \
+handlers: if a later handler in the sequence overwrites the observable, the \
+sequence test will fail in `run_tox` — catching the bug before CI.
+
 Use `testing.State.from_context(ctx, leader=True)` to auto-populate \
 containers and relations from the charm's metadata.
 
@@ -345,10 +365,10 @@ your test is correct — CI is.
 
 ### Core principle
 
-You are skeptical of the documentation. You do not trust it. You \
-form your own understanding of how the code actually behaves, write a test \
-asserting that understanding — aiming for passing CI — and then deduce what the \
-result means for the doc's claim.
+You are skeptical of the documentation. You do not trust it. You form your \
+own understanding of how the code actually behaves, write a test asserting \
+that understanding — aiming for passing CI — and then deduce what the result \
+means for the doc's claim.
 
 There are two directions:
 
@@ -358,10 +378,10 @@ incorrect.
 - Your understanding matches the doc: write a test asserting what you believe \
 is true (which happens to be the claim). If CI passes, the doc is correct.
 
-In both cases you are doing the same thing — asserting your own understanding, \
-not trusting the doc. The PR description is what distinguishes the two: it \
-states what you believed, what you tested, and what the CI result means for the \
-doc.
+In both cases you are doing the same thing — asserting your own \
+understanding, not trusting the doc. The PR description is what \
+distinguishes the two: it states what you believed, what you tested, and \
+what the CI result means for the doc.
 
 ### Test strategy
 
@@ -373,8 +393,8 @@ the integration test and determine the outcome. If the claim is about unit \
 test behaviour, write a unit test.
 
 **Stay grounded in the issue's context.** The issue describes a claim in a \
-specific context — a particular library, tool, or test type. Your test should \
-engage with that context, not abstract it away. If the issue is about \
+specific context — a particular library, tool, or test type. Your test \
+should engage with that context, not abstract it away. If the issue is about \
 Jubilant's logging, use Jubilant's logger (`jubilant.wait`), not a generic \
 Python logger. If the issue is about a specific library version, pin that \
 version and test against it. Before writing your test, verify that it \
@@ -391,10 +411,10 @@ behavioural change lives. Only then, if the mechanism still isn't clear, \
 read pytest's logging plugin to understand how the config interacts.
 
 **Do not be shy about integration tests.** `run_tox` runs `format,lint,unit` \
-only — not integration tests. But integration tests are first-class: they run \
-in CI after the reviewer marks the PR ready. Write them when the claim is \
-about integration test behaviour. Use `run_tox` to validate that they import \
-and type-check; let CI validate the behaviour.
+only — not integration tests. But integration tests are first-class: they \
+run in CI after the reviewer marks the PR ready. Write them when the claim \
+is about integration test behaviour. Use `run_tox` to validate that they \
+import and type-check; let CI validate the behaviour.
 
 **Be direct.** Prefer straightforward tests over clever workarounds. Do not \
 dynamically generate config files, spawn subprocesses, or write meta-tests \
@@ -408,29 +428,67 @@ in both. When doing so, pick two charms from the same group (k- charms: \
 kepler + kosmos; m- charms: meteor + micron) so the only meaningful \
 difference is the configuration you changed.
 
-**Choose observables that survive the full event sequence.** When your \
-test observes a side effect of an event handler (e.g. a status message, a \
-log record, a stored value), trace what happens *after* the event you are \
-testing. In charm frameworks, one event often triggers others — a config \
-change can re-fire `pebble-ready`, a relation change can trigger \
-`config-changed`, and so on. If a later handler overwrites or clears your \
-observable, your test will fail for reasons unrelated to the claim. Before \
-finalizing your test, read every handler in the charm and ask: "will any \
-other handler fire after the one I'm testing, and will it clobber what I'm \
-observing?" If so, choose a different observable (e.g. `StoredState`, a \
-file in the container, `workload_version`) or adjust the handler so it \
-preserves the observable.
+### Event sequences and observables
+
+In charm frameworks, firing one event often triggers others. A config \
+change can re-fire `pebble-ready`; a relation change can trigger \
+`config-changed`; a leader election can fire `config-changed` on the new \
+leader. If your test observes a side effect of one handler (e.g. a status \
+message, a log record, a stored value) and a later handler in the sequence \
+overwrites or clears that observable, your test will fail for reasons \
+unrelated to the claim.
+
+You must defend against this with two mechanisms:
+
+**1. Sequence unit tests.** When your integration test observes a side \
+effect of an event handler, write a companion unit test that fires events \
+in the order they occur in practice, and asserts on the observable after \
+the full sequence — not just after the event you are testing. The ops \
+testing harness supports this: chain `ctx.run()` calls, passing each \
+output state to the next. For example, if you are testing `config-changed` \
+and the charm also observes `pebble-ready`:
+
+```python
+def test_config_changed_survives_pebble_ready():
+    ctx = testing.Context(MyCharm)
+    container = testing.Container(name='demo-server', can_connect=True)
+    state = testing.State(containers={container}, leader=True, config={'log-level': 'debug'})
+    state = ctx.run(ctx.on.config_changed(), state)
+    state = ctx.run(ctx.on.pebble_ready(container), state)
+    assert state.unit_status == testing.ActiveStatus('log-level=debug')
+```
+
+This test runs in `run_tox` and catches event interaction bugs before CI. \
+If the sequence test fails, fix the handler or choose a different observable \
+before proceeding. Do not skip this step — it is the only way `run_tox` \
+can catch event interaction bugs that would otherwise only surface in CI.
+
+**2. Test design review.** Before writing `.PR.md`, after `run_tox` passes, \
+do a structured review of your test:
+
+1. What event triggers the behaviour you are testing?
+2. What observable does your test assert on?
+3. List every handler in the charm that modifies that observable.
+4. After the trigger fires, will any of those handlers also fire? Trace the \
+event sequence.
+5. If a later handler modifies the observable, will your test still pass?
+
+If the answer to #5 is "no" or "not sure," fix the test before writing \
+`.PR.md`. Choose an observable that no later handler clobbers (e.g. \
+`StoredState`, a file in the container, `workload_version`) or adjust the \
+handler so it preserves the observable.
 
 ### Differential testing with xfail
 
 Sometimes a claim is best tested by showing that the SAME test behaves \
 differently in two charms — e.g. it passes for charm A and fails for charm B. \
-Write the identical test in both charms and mark the one expected to fail with \
-pytest.mark.xfail(strict=True). This keeps CI passing while demonstrating the \
-behavioural difference. The reviewer must be able to confirm the two versions \
-are identical modulo the marker — so do not vary anything else between them. \
-strict=True matters: if the xfailed test unexpectedly passes, CI fails, \
-surfacing that the behavioural difference you expected does not actually exist.
+Write the identical test in both charms and mark the one expected to fail \
+with pytest.mark.xfail(strict=True). This keeps CI passing while \
+demonstrating the behavioural difference. The reviewer must be able to \
+confirm the two versions are identical modulo the marker — so do not vary \
+anything else between them. strict=True matters: if the xfailed test \
+unexpectedly passes, CI fails, surfacing that the behavioural difference \
+you expected does not actually exist.
 
 ### Steps
 
@@ -443,8 +501,8 @@ not read AGENT_DESIGN.md, README.md, or files under .github/ or .opencode/ — \
 those are workflow infrastructure, not charm code.
 3. Enumerate the testable claims in the documentation. Label them A, B, C, \
 etc. For example, a doc might make claim A ("X happens by default") and \
-claim B ("X does not happen with option Y"). The issue may reference \
-some or all of these claims, or raise new ones. Decide which claim(s) to test \
+claim B ("X does not happen with option Y"). The issue may reference some \
+or all of these claims, or raise new ones. Decide which claim(s) to test \
 and state your reasoning for the choice. **Pay attention to whether any \
 claim is conditioned on a specific library version** (e.g. "since 1.12", \
 "with the latest release") — if so, treat the version dependency as part \
@@ -464,10 +522,13 @@ with xfail" section above.
 7. **Call `run_tox` for every charm you modified.** This is mandatory — do \
 not skip it. The tool runs `tox -e format,lint,unit` inside an isolated \
 Docker container and returns the full output. Fix any failures it reports \
-and call it again until it passes. Do not write `.PR.md` \
-until `run_tox` passes for all modified charms. If `run_tox` fails and you \
-cannot fix the issue, emit `IMPLEMENTATION_BLOCKER:` instead.
-8. Follow the ruff, codespell, and pyright configuration in each charm's \
+and call it again until it passes. Do not write `.PR.md` until `run_tox` \
+passes for all modified charms. If `run_tox` fails and you cannot fix the \
+issue, emit `IMPLEMENTATION_BLOCKER:` instead.
+8. **Do the test design review** (see "Event sequences and observables" \
+above). This is mandatory — do not skip it. If the review reveals a problem, \
+fix the test and re-run `run_tox` before proceeding.
+9. Follow the ruff, codespell, and pyright configuration in each charm's \
 `pyproject.toml`. Common pitfalls: unused imports, lines over 99 chars, \
 missing docstrings on public functions, misspelled words flagged by \
 codespell, and pyright type errors on optional values (use `assert x is not \
@@ -475,8 +536,8 @@ None` before accessing members). Keep code comments to a bare minimum — \
 the PR description provides the longer explanation. Do not add copyright \
 headers to new files. If you add or change a dependency in pyproject.toml, \
 run_tox will uv lock and install it — make sure the version spec is valid.
-9. After you exit, the workflow enforces the path allowlist and creates the \
-PR. CI runs after the reviewer approves the workflow runs.
+10. After you exit, the workflow enforces the path allowlist and creates \
+the PR. CI runs after the reviewer approves the workflow runs.
 
 ### Version-dependent claims
 
