@@ -31,6 +31,7 @@ class KosmosCharm(ops.CharmBase):
         super().__init__(framework)
         self.pebble_service_name = "fastapi-service"
         framework.observe(self.on["demo-server"].pebble_ready, self._on_demo_server_pebble_ready)
+        framework.observe(self.on.get_greeting_action, self._on_get_greeting_action)
 
     def _on_demo_server_pebble_ready(self, event: ops.PebbleReadyEvent) -> None:
         """Define and start a workload using the Pebble API."""
@@ -67,6 +68,20 @@ class KosmosCharm(ops.CharmBase):
             },
         }
         return ops.pebble.Layer(pebble_layer)
+
+    def _on_get_greeting_action(self, event: ops.ActionEvent) -> None:
+        """Handle the get-greeting action.
+
+        Reports whether the ``name`` parameter was received and its value.
+        This lets integration tests check whether Juju injects the ``default``
+        value from the action metadata when the parameter is not passed.
+        """
+        event.set_results(
+            {
+                "name-present": "true" if "name" in event.params else "false",
+                "name-value": event.params.get("name", ""),
+            }
+        )
 
 
 if __name__ == "__main__":  # pragma: nocover

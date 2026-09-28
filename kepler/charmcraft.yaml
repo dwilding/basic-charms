@@ -43,6 +43,21 @@ config:
       default: "info"
       type: string
 
+# Actions that the charm exposes.
+# More information on this section is at:
+# https://juju.is/docs/sdk/actions-yaml
+actions:
+  get-greeting:
+    description: |
+      Return the greeting parameters received by the charm.
+      Used to test whether a `default` value in an action parameter
+      definition is applied by Juju when the parameter is not passed.
+    params:
+      name:
+        type: string
+        description: The name to include in the greeting.
+        default: world
+
 containers:
   demo-server:
     resource: demo-server-image
