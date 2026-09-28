@@ -39,3 +39,24 @@ def test_deploy(charm: pathlib.Path, juju: jubilant.Juju):
     }
     juju.deploy(charm, app=APP_NAME, resources=resources)
     juju.wait(jubilant.all_active)
+
+
+def test_action_default_not_applied(charm: pathlib.Path, juju: jubilant.Juju):
+    """Run the get-greeting action without passing the ``name`` parameter.
+
+    The action's ``name`` parameter has ``default: world`` in charmcraft.yaml.
+    If Juju injected the default, the charm would receive ``name=world`` and
+    report ``name-present=true``. I believe Juju does NOT inject defaults from
+    action metadata, so the charm should report ``name-present=false``.
+
+    If this test passes, the default does not reach the charm code.
+    If it fails, Juju does inject the default and the claim is refuted.
+    """
+    task = juju.run(f"{APP_NAME}/0", "get-greeting")
+    assert task.success, f"Action failed: {task}"
+    assert task.results.get("name-present") == "false", (
+        f"Expected name-present=false (default not injected), got: {task.results}"
+    )
+    assert task.results.get("name-value") == "", (
+        f"Expected name-value empty (default not injected), got: {task.results}"
+    )

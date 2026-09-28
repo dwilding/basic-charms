@@ -51,3 +51,24 @@ def test_pebble_layer():
         state_out.get_container(container.name).service_statuses["fastapi-service"]
         == ops.pebble.ServiceStatus.ACTIVE
     )
+
+
+def test_get_greeting_action_without_params():
+    """The action handler reports the param is absent when no params are passed.
+
+    The ops testing harness passes exactly the params you give it — it does not
+    read ``default`` from the action metadata. This test validates the handler
+    logic; the integration test checks whether Juju itself injects the default.
+    """
+    ctx = testing.Context(KosmosCharm)
+    state_in = testing.State(leader=True)
+    ctx.run(ctx.on.action("get-greeting"), state_in)
+    assert ctx.action_results == {"name-present": "false", "name-value": ""}
+
+
+def test_get_greeting_action_with_params():
+    """The action handler reports the param value when it is explicitly passed."""
+    ctx = testing.Context(KosmosCharm)
+    state_in = testing.State(leader=True)
+    ctx.run(ctx.on.action("get-greeting", params={"name": "alice"}), state_in)
+    assert ctx.action_results == {"name-present": "true", "name-value": "alice"}
